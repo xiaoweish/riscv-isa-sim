@@ -37,6 +37,30 @@ cache_sim_t* cache_sim_t::construct(const char* config, const char* name)
   return new cache_sim_t(sets, ways, linesz, name);
 }
 
+cache_sim_t* cache_sim_t::construct_tc(const char* config, const char* name)
+{
+  const char* wp = strchr(config, ':');
+  if (!wp++) help();
+  const char* bp = strchr(wp, ':');
+  if (!bp++) help();
+  const char* tp = strchr(bp, ':');
+  tp++;
+
+  size_t sets = atoi(std::string(config, wp).c_str());
+  size_t ways = atoi(std::string(wp, bp).c_str());
+  size_t linesz = atoi(std::string(bp, tp).c_str());
+  size_t tagbits = atoi(tp);
+  
+  if( tagbits!=1 && tagbits!=2 && tagbits!=4 )
+  {
+      help();
+  }
+
+  if (ways > 4 /* empirical */ && sets == 1)
+    return new fa_cache_sim_t(ways, linesz*64/tagbits, name);
+  return new cache_sim_t(sets, ways, linesz*64/tagbits, name);
+}
+
 void cache_sim_t::init()
 {
   if(sets == 0 || (sets & (sets-1)))

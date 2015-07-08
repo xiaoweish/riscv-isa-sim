@@ -43,7 +43,6 @@ struct state_t
   reg_t mstatus;
   reg_t mepc;
   reg_t mbadaddr;
-  reg_t mtimecmp;
   reg_t mscratch;
   reg_t mcause;
   reg_t minstret;
@@ -59,6 +58,8 @@ struct state_t
   reg_t suinstret_delta;
   reg_t tohost;
   reg_t fromhost;
+  reg_t prev_rtc;
+  uint32_t stimecmp;
   uint32_t fflags;
   uint32_t frm;
   bool serialized; // whether timer CSRs are in a well-defined state

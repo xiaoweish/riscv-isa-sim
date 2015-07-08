@@ -35,11 +35,14 @@ sim_t::sim_t(const char* isa, size_t nprocs, size_t mem_mb,
   while ((mem = (char*)calloc(1, memsz)) == NULL)
     memsz = memsz*10/11/quantum*quantum;
 
+  //TODO allocate memory for mem tags, using char to store 8 tags, therefore using memsz/8 chars
+  tagmem = (char*)calloc(1, memsz>>3);
+  
   if (memsz != memsz0)
     fprintf(stderr, "warning: only got %lu bytes of target mem (wanted %lu)\n",
             (unsigned long)memsz, (unsigned long)memsz0);
 
-  debug_mmu = new mmu_t(mem, memsz);
+  debug_mmu = new mmu_t(mem, tagmem, memsz);
 
   for (size_t i = 0; i < procs.size(); i++)
     procs[i] = new processor_t(isa, this, i);
@@ -51,6 +54,7 @@ sim_t::~sim_t()
     delete procs[i];
   delete debug_mmu;
   free(mem);
+  free(tagmem);
 }
 
 void sim_t::send_ipi(reg_t who)

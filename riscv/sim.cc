@@ -71,6 +71,8 @@ reg_t sim_t::get_scr(int which)
 
 int sim_t::run()
 {
+  if (!debug && log)
+    set_procs_debug(true);
   while (htif->tick())
   {
     if (debug || ctrlc_pressed)
@@ -123,6 +125,11 @@ void sim_t::set_debug(bool value)
   debug = value;
 }
 
+void sim_t::set_log(bool value)
+{
+  log = value;
+}
+
 void sim_t::set_histogram(bool value)
 {
   histogram_enabled = value;
@@ -137,3 +144,12 @@ void sim_t::set_procs_debug(bool value)
     procs[i]->set_debug(value);
 }
 
+bool sim_t::mmio_load(reg_t addr, size_t len, uint8_t* bytes)
+{
+  return false;
+}
+
+bool sim_t::mmio_store(reg_t addr, size_t len, const uint8_t* bytes)
+{
+  return false;
+}

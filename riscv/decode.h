@@ -53,6 +53,8 @@ const int NFPR = 32;
    ((x) & 0x1f) < 0x1f ? 4 : \
    ((x) & 0x3f) < 0x3f ? 6 : \
    8)
+#define MAX_INSN_LENGTH 8
+#define PC_ALIGN 2
 
 typedef uint64_t insn_bits_t;
 class insn_t
@@ -75,21 +77,21 @@ public:
   uint64_t csr() { return x(20, 12); }
 
   int64_t rvc_imm() { return x(2, 5) + (xs(12, 1) << 5); }
+  int64_t rvc_zimm() { return x(2, 5) + (x(12, 1) << 5); }
   int64_t rvc_addi4spn_imm() { return (x(6, 1) << 2) + (x(5, 1) << 3) + (x(11, 2) << 4) + (x(7, 4) << 6); }
-  int64_t rvc_addi16sp_imm() { return (x(6, 1) << 4) + (x(5, 1) << 5) + (x(2, 3) << 6) + (xs(12, 1) << 9); }
+  int64_t rvc_addi16sp_imm() { return (x(6, 1) << 4) + (x(2, 1) << 5) + (x(5, 1) << 6) + (x(3, 2) << 7) + (xs(12, 1) << 9); }
   int64_t rvc_lwsp_imm() { return (x(4, 3) << 2) + (x(12, 1) << 5) + (x(2, 2) << 6); }
   int64_t rvc_ldsp_imm() { return (x(5, 2) << 3) + (x(12, 1) << 5) + (x(2, 3) << 6); }
   int64_t rvc_swsp_imm() { return (x(9, 4) << 2) + (x(7, 2) << 6); }
   int64_t rvc_sdsp_imm() { return (x(10, 3) << 3) + (x(7, 3) << 6); }
   int64_t rvc_lw_imm() { return (x(6, 1) << 2) + (x(10, 3) << 3) + (x(5, 1) << 6); }
   int64_t rvc_ld_imm() { return (x(10, 3) << 3) + (x(5, 2) << 6); }
-  int64_t rvc_j_imm() { return (x(3, 4) << 1) + (x(2, 1) << 5) + (xs(7, 6) << 6); }
-  int64_t rvc_b_imm() { return (x(3, 4) << 1) + (x(2, 1) << 5) + (xs(10, 3) << 6); }
+  int64_t rvc_j_imm() { return (x(3, 3) << 1) + (x(11, 1) << 4) + (x(2, 1) << 5) + (x(7, 1) << 6) + (x(6, 1) << 7) + (x(9, 2) << 8) + (x(8, 1) << 10) + (xs(12, 1) << 11); }
+  int64_t rvc_b_imm() { return (x(3, 2) << 1) + (x(10, 2) << 3) + (x(2, 1) << 5) + (x(5, 2) << 6) + (xs(12, 1) << 8); }
   int64_t rvc_simm3() { return x(10, 3); }
   uint64_t rvc_rd() { return rd(); }
   uint64_t rvc_rs1() { return rd(); }
   uint64_t rvc_rs2() { return x(2, 5); }
-  uint64_t rvc_rds() { return 8 + x(10, 3); }
   uint64_t rvc_rs1s() { return 8 + x(7, 3); }
   uint64_t rvc_rs2s() { return 8 + x(2, 3); }
 private:
@@ -122,26 +124,34 @@ private:
 #define READ_REG(reg) STATE.XPR[reg]
 #define RS1 READ_REG(insn.rs1())
 #define RS2 READ_REG(insn.rs2())
-#define WRITE_REG(reg, value) STATE.XPR.write(reg, value)
 #define WRITE_RD(value) WRITE_REG(insn.rd(), value)
 
-#ifdef RISCV_ENABLE_COMMITLOG
-  #undef WRITE_REG
-  #define WRITE_REG(reg, value) ({ \
-        reg_t wdata = (value); /* value is a func with side-effects */ \
-        STATE.log_reg_write = (commit_log_reg_t){(reg) << 1, wdata}; \
-        STATE.XPR.write(reg, wdata); \
-      })
+#ifndef RISCV_ENABLE_COMMITLOG
+# define WRITE_REG(reg, value) STATE.XPR.write(reg, value)
+# define WRITE_FREG(reg, value) DO_WRITE_FREG(reg, value)
+#else
+# define WRITE_REG(reg, value) ({ \
+    reg_t wdata = (value); /* value may have side effects */ \
+    STATE.log_reg_write = (commit_log_reg_t){(reg) << 1, wdata}; \
+    STATE.XPR.write(reg, wdata); \
+  })
+# define WRITE_FREG(reg, value) ({ \
+    freg_t wdata = (value); /* value may have side effects */ \
+    STATE.log_reg_write = (commit_log_reg_t){((reg) << 1) | 1, wdata}; \
+    DO_WRITE_FREG(reg, wdata); \
+  })
 #endif
 
 // RVC macros
-#define WRITE_RVC_RDS(value) WRITE_REG(insn.rvc_rds(), value)
 #define WRITE_RVC_RS1S(value) WRITE_REG(insn.rvc_rs1s(), value)
 #define WRITE_RVC_RS2S(value) WRITE_REG(insn.rvc_rs2s(), value)
+#define WRITE_RVC_FRS2S(value) WRITE_FREG(insn.rvc_rs2s(), value)
 #define RVC_RS1 READ_REG(insn.rvc_rs1())
 #define RVC_RS2 READ_REG(insn.rvc_rs2())
 #define RVC_RS1S READ_REG(insn.rvc_rs1s())
 #define RVC_RS2S READ_REG(insn.rvc_rs2s())
+#define RVC_FRS2 STATE.FPR[insn.rvc_rs2()]
+#define RVC_FRS2S STATE.FPR[insn.rvc_rs2s()]
 #define RVC_SP READ_REG(X_SP)
 
 // FPU macros
@@ -150,17 +160,8 @@ private:
 #define FRS3 STATE.FPR[insn.rs3()]
 #define dirty_fp_state (STATE.mstatus |= MSTATUS_FS | (xlen == 64 ? MSTATUS64_SD : MSTATUS32_SD))
 #define dirty_ext_state (STATE.mstatus |= MSTATUS_XS | (xlen == 64 ? MSTATUS64_SD : MSTATUS32_SD))
-#define do_write_frd(value) (STATE.FPR.write(insn.rd(), value), dirty_fp_state)
- 
-#ifndef RISCV_ENABLE_COMMITLOG
-# define WRITE_FRD(value) do_write_frd(value)
-#else
-# define WRITE_FRD(value) ({ \
-        freg_t wdata = (value); /* value may have side effects */ \
-        STATE.log_reg_write = (commit_log_reg_t){(insn.rd() << 1) | 1, wdata}; \
-        do_write_frd(wdata); \
-      })
-#endif
+#define DO_WRITE_FREG(reg, value) (STATE.FPR.write(reg, value), dirty_fp_state)
+#define WRITE_FRD(value) WRITE_FREG(insn.rd(), value)
  
 #define SHAMT (insn.i_imm() & 0x3F)
 #define BRANCH_TARGET (pc + insn.sb_imm())

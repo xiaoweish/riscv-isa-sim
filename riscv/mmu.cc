@@ -34,9 +34,13 @@ reg_t mmu_t::translate(reg_t addr, access_type type)
   if (!proc)
     return addr;
 
-  reg_t mode = get_field(proc->state.mstatus, MSTATUS_PRV);
-  if (type != FETCH && get_field(proc->state.mstatus, MSTATUS_MPRV))
-    mode = get_field(proc->state.mstatus, MSTATUS_PRV1);
+  reg_t mode = proc->state.prv;
+  bool pum = false;
+  if (type != FETCH) {
+    if (get_field(proc->state.mstatus, MSTATUS_MPRV))
+      mode = get_field(proc->state.mstatus, MSTATUS_MPP);
+    pum = (mode == PRV_S && get_field(proc->state.mstatus, MSTATUS_PUM));
+  }
   if (get_field(proc->state.mstatus, MSTATUS_VM) == VM_MBARE)
     mode = PRV_M;
 
@@ -44,13 +48,15 @@ reg_t mmu_t::translate(reg_t addr, access_type type)
     reg_t msb_mask = (reg_t(2) << (proc->xlen-1))-1; // zero-extend from xlen
     return addr & msb_mask;
   }
-  return walk(addr, mode > PRV_U, type) | (addr & (PGSIZE-1));
+  return walk(addr, type, mode > PRV_U, pum) | (addr & (PGSIZE-1));
 }
 
 const uint16_t* mmu_t::fetch_slow_path(reg_t addr)
 {
   reg_t paddr = translate(addr, FETCH);
-  if (paddr >= memsz)
+  if (paddr < memsz)
+    refill_tlb(addr, paddr, FETCH);
+  else
     throw trap_instruction_access_fault(addr);
   return (const uint16_t*)(mem + paddr);
 }
@@ -64,7 +70,7 @@ void mmu_t::load_slow_path(reg_t addr, reg_t len, uint8_t* bytes)
       tracer.trace(paddr, len, LOAD);
     else
       refill_tlb(addr, paddr, LOAD);
-  } else if (!proc || !proc->sim->mmio_load(addr, len, bytes)) {
+  } else if (!proc || !proc->sim->mmio_load(paddr, len, bytes)) {
     throw trap_load_access_fault(addr);
   }
 }
@@ -78,7 +84,7 @@ void mmu_t::store_slow_path(reg_t addr, reg_t len, const uint8_t* bytes)
       tracer.trace(paddr, len, STORE);
     else
       refill_tlb(addr, paddr, STORE);
-  } else if (!proc || !proc->sim->mmio_store(addr, len, bytes)) {
+  } else if (!proc || !proc->sim->mmio_store(paddr, len, bytes)) {
     throw trap_store_access_fault(addr);
   }
 }
@@ -99,7 +105,7 @@ void mmu_t::refill_tlb(reg_t vaddr, reg_t paddr, access_type type)
   tlb_data[idx] = mem + paddr - vaddr;
 }
 
-reg_t mmu_t::walk(reg_t addr, bool supervisor, access_type type)
+reg_t mmu_t::walk(reg_t addr, access_type type, bool supervisor, bool pum)
 {
   int levels, ptidxbits, ptesize;
   switch (get_field(proc->get_state()->mstatus, MSTATUS_VM))
@@ -117,7 +123,7 @@ reg_t mmu_t::walk(reg_t addr, bool supervisor, access_type type)
   if (masked_msbs != 0 && masked_msbs != mask)
     return -1;
 
-  reg_t base = proc->get_state()->sptbr;
+  reg_t base = proc->get_state()->sptbr << PGSHIFT;
   int ptshift = (levels - 1) * ptidxbits;
   for (int i = 0; i < levels; i++, ptshift -= ptidxbits) {
     reg_t idx = (addr >> (PGSHIFT + ptshift)) & ((1 << ptidxbits) - 1);
@@ -133,6 +139,8 @@ reg_t mmu_t::walk(reg_t addr, bool supervisor, access_type type)
 
     if (PTE_TABLE(pte)) { // next level of page table
       base = ppn << PGSHIFT;
+    } else if (pum && PTE_CHECK_PERM(pte, 0, type == STORE, type == FETCH)) {
+      break;
     } else if (!PTE_CHECK_PERM(pte, supervisor, type == STORE, type == FETCH)) {
       break;
     } else {

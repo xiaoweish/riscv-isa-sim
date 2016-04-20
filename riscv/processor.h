@@ -4,7 +4,8 @@
 
 #include "decode.h"
 #include "config.h"
-#include <cstring>
+#include "devices.h"
+#include <string>
 #include <vector>
 #include <map>
 
@@ -40,6 +41,7 @@ struct state_t
   regfile_t<freg_t, NFPR, false> FPR;
 
   // control and status registers
+  reg_t prv;
   reg_t mstatus;
   reg_t mepc;
   reg_t mbadaddr;
@@ -49,14 +51,16 @@ struct state_t
   reg_t minstret;
   reg_t mie;
   reg_t mip;
+  reg_t medeleg;
+  reg_t mideleg;
+  reg_t mucounteren;
+  reg_t mscounteren;
   reg_t sepc;
   reg_t sbadaddr;
   reg_t sscratch;
   reg_t stvec;
   reg_t sptbr;
   reg_t scause;
-  reg_t sutime_delta;
-  reg_t suinstret_delta;
   reg_t tohost;
   reg_t fromhost;
   uint32_t fflags;
@@ -72,7 +76,7 @@ struct state_t
 };
 
 // this class represents one processor in a RISC-V machine.
-class processor_t
+class processor_t : public abstract_device_t
 {
 public:
   processor_t(const char* isa, sim_t* sim, uint32_t id);
@@ -82,7 +86,6 @@ public:
   void set_histogram(bool value);
   void reset(bool value);
   void step(size_t n); // run for n cycles
-  void deliver_ipi(); // register an interprocessor interrupt
   bool running() { return run; }
   void set_csr(int which, reg_t val);
   void raise_interrupt(reg_t which);
@@ -91,15 +94,19 @@ public:
   state_t* get_state() { return &state; }
   extension_t* get_extension() { return ext; }
   bool supports_extension(unsigned char ext) {
-    return ext >= 'A' && ext <= 'Z' && ((cpuid >> (ext - 'A')) & 1);
+    if (ext >= 'a' && ext <= 'z') ext += 'A' - 'a';
+    return ext >= 'A' && ext <= 'Z' && ((isa >> (ext - 'A')) & 1);
   }
-  void push_privilege_stack();
-  void pop_privilege_stack();
+  void set_privilege(reg_t);
   void yield_load_reservation() { state.load_reservation = (reg_t)-1; }
   void update_histogram(reg_t pc);
 
   void register_insn(insn_desc_t);
   void register_extension(extension_t*);
+
+  // MMIO slave interface
+  bool load(reg_t addr, size_t len, uint8_t* bytes);
+  bool store(reg_t addr, size_t len, const uint8_t* bytes);
 
 private:
   sim_t* sim;
@@ -107,10 +114,11 @@ private:
   extension_t* ext;
   disassembler_t* disassembler;
   state_t state;
-  reg_t cpuid;
   uint32_t id;
-  int max_xlen;
-  int xlen;
+  unsigned max_xlen;
+  unsigned xlen;
+  reg_t isa;
+  std::string isa_string;
   bool run; // !reset
   bool debug;
   bool histogram_enabled;

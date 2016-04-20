@@ -4,6 +4,7 @@
 #include "htif.h"
 #include <map>
 #include <iostream>
+#include <sstream>
 #include <climits>
 #include <cstdlib>
 #include <cassert>
@@ -29,11 +30,11 @@ sim_t::sim_t(const char* isa, size_t nprocs, size_t mem_mb,
   size_t memsz0 = (size_t)mem_mb << 20;
   size_t quantum = 1L << 20;
   if (memsz0 == 0)
-    memsz0 = 1L << (sizeof(size_t) == 8 ? 32 : 30);
+    memsz0 = (size_t)((sizeof(size_t) == 8 ? 4096 : 2048) - 256) << 20;
 
   memsz = memsz0;
   while ((mem = (char*)calloc(1, memsz)) == NULL)
-    memsz = memsz*10/11/quantum*quantum;
+    memsz = (size_t)(memsz*0.9)/quantum*quantum;
 
   if (memsz != memsz0)
     fprintf(stderr, "warning: only got %lu bytes of target mem (wanted %lu)\n",
@@ -43,6 +44,8 @@ sim_t::sim_t(const char* isa, size_t nprocs, size_t mem_mb,
 
   for (size_t i = 0; i < procs.size(); i++)
     procs[i] = new processor_t(isa, this, i);
+
+  make_config_string();
 }
 
 sim_t::~sim_t()
@@ -51,12 +54,6 @@ sim_t::~sim_t()
     delete procs[i];
   delete debug_mmu;
   free(mem);
-}
-
-void sim_t::send_ipi(reg_t who)
-{
-  if (who < procs.size())
-    procs[who]->deliver_ipi();
 }
 
 reg_t sim_t::get_scr(int which)
@@ -146,10 +143,54 @@ void sim_t::set_procs_debug(bool value)
 
 bool sim_t::mmio_load(reg_t addr, size_t len, uint8_t* bytes)
 {
-  return false;
+  if (addr + len < addr)
+    return false;
+  return bus.load(addr, len, bytes);
 }
 
 bool sim_t::mmio_store(reg_t addr, size_t len, const uint8_t* bytes)
 {
-  return false;
+  if (addr + len < addr)
+    return false;
+  return bus.store(addr, len, bytes);
+}
+
+void sim_t::make_config_string()
+{
+  size_t csr_size = NCSR * 16 /* RV128 */;
+  size_t device_tree_addr = memsz;
+  size_t cpu_addr = memsz + csr_size;
+
+  std::stringstream s;
+  s << std::hex <<
+        "platform {\n"
+        "  vendor ucb;\n"
+        "  arch spike;\n"
+        "};\n"
+        "ram {\n"
+        "  0 {\n"
+        "    addr 0;\n"
+        "    size 0x" << memsz << ";\n"
+        "  };\n"
+        "};\n"
+        "core {\n";
+  for (size_t i = 0; i < procs.size(); i++) {
+    s <<
+        "  " << i << " {\n"
+        "    " << "0 {\n" << // hart 0 on core i
+        "      isa " << procs[i]->isa_string << ";\n"
+        "      addr 0x" << cpu_addr << ";\n"
+        "    };\n"
+        "  };\n";
+    bus.add_device(cpu_addr, procs[i]);
+    cpu_addr += csr_size;
+  }
+  s <<  "};\n";
+
+  std::string str = s.str();
+  std::vector<char> vec(str.begin(), str.end());
+  vec.push_back(0);
+  assert(vec.size() <= csr_size);
+  config_string.reset(new rom_device_t(vec));
+  bus.add_device(memsz, config_string.get());
 }

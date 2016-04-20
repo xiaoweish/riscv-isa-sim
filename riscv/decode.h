@@ -21,6 +21,7 @@ typedef uint64_t freg_t;
 
 const int NXPR = 32;
 const int NFPR = 32;
+const int NCSR = 4096;
 
 #define X_RA 1
 #define X_SP 2
@@ -122,6 +123,7 @@ private:
 #define MMU (*p->get_mmu())
 #define STATE (*p->get_state())
 #define READ_REG(reg) STATE.XPR[reg]
+#define READ_FREG(reg) STATE.FPR[reg]
 #define RS1 READ_REG(insn.rs1())
 #define RS2 READ_REG(insn.rs2())
 #define WRITE_RD(value) WRITE_REG(insn.rd(), value)
@@ -150,14 +152,14 @@ private:
 #define RVC_RS2 READ_REG(insn.rvc_rs2())
 #define RVC_RS1S READ_REG(insn.rvc_rs1s())
 #define RVC_RS2S READ_REG(insn.rvc_rs2s())
-#define RVC_FRS2 STATE.FPR[insn.rvc_rs2()]
-#define RVC_FRS2S STATE.FPR[insn.rvc_rs2s()]
+#define RVC_FRS2 READ_FREG(insn.rvc_rs2())
+#define RVC_FRS2S READ_FREG(insn.rvc_rs2s())
 #define RVC_SP READ_REG(X_SP)
 
 // FPU macros
-#define FRS1 STATE.FPR[insn.rs1()]
-#define FRS2 STATE.FPR[insn.rs2()]
-#define FRS3 STATE.FPR[insn.rs3()]
+#define FRS1 READ_FREG(insn.rs1())
+#define FRS2 READ_FREG(insn.rs2())
+#define FRS3 READ_FREG(insn.rs3())
 #define dirty_fp_state (STATE.mstatus |= MSTATUS_FS | (xlen == 64 ? MSTATUS64_SD : MSTATUS32_SD))
 #define dirty_ext_state (STATE.mstatus |= MSTATUS_XS | (xlen == 64 ? MSTATUS64_SD : MSTATUS32_SD))
 #define DO_WRITE_FREG(reg, value) (STATE.FPR.write(reg, value), dirty_fp_state)
@@ -175,7 +177,7 @@ private:
 #define set_field(reg, mask, val) (((reg) & ~(decltype(reg))(mask)) | (((decltype(reg))(val) * ((mask) & ~((mask) << 1))) & (decltype(reg))(mask)))
 
 #define require(x) if (unlikely(!(x))) throw trap_illegal_instruction()
-#define require_privilege(p) require(get_field(STATE.mstatus, MSTATUS_PRV) >= (p))
+#define require_privilege(p) require(STATE.prv >= (p))
 #define require_rv64 require(xlen == 64)
 #define require_rv32 require(xlen == 32)
 #define require_extension(s) require(p->supports_extension(s))
@@ -196,15 +198,27 @@ private:
        npc = sext_xlen(x); \
      } while(0)
 
-#define PC_SERIALIZE 3 /* sentinel value indicating simulator pipeline flush */
+#define set_pc_and_serialize(x) \
+  do { set_pc(x); /* check alignment */ \
+       npc = PC_SERIALIZE_AFTER; \
+       STATE.pc = (x); \
+     } while(0)
+
+/* Sentinel PC values to serialize simulator pipeline */
+#define PC_SERIALIZE_BEFORE 3
+#define PC_SERIALIZE_AFTER 5
+#define invalid_pc(pc) ((pc) & 1)
+
+/* Convenience wrappers to simplify softfloat code sequences */
+#define f32(x) ((float32_t){(uint32_t)x})
+#define f64(x) ((float64_t){(uint64_t)x})
 
 #define validate_csr(which, write) ({ \
-  if (!STATE.serialized) return PC_SERIALIZE; \
+  if (!STATE.serialized) return PC_SERIALIZE_BEFORE; \
   STATE.serialized = false; \
-  unsigned my_priv = get_field(STATE.mstatus, MSTATUS_PRV); \
   unsigned csr_priv = get_field((which), 0x300); \
   unsigned csr_read_only = get_field((which), 0xC00) == 3; \
-  if (((write) && csr_read_only) || my_priv < csr_priv) \
+  if (((write) && csr_read_only) || STATE.prv < csr_priv) \
     throw trap_illegal_instruction(); \
   (which); })
 

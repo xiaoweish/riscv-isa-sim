@@ -126,14 +126,14 @@ void sim_t::set_procs_debug(bool value)
     procs[i]->set_debug(value);
 }
 
-bool sim_t::mmio_load(reg_t addr, size_t len, uint8_t* bytes)
+bool sim_t::mmio_load(word_t addr, size_t len, uint8_t* bytes)
 {
   if (addr + len < addr)
     return false;
   return bus.load(addr, len, bytes);
 }
 
-bool sim_t::mmio_store(reg_t addr, size_t len, const uint8_t* bytes)
+bool sim_t::mmio_store(word_t addr, size_t len, const uint8_t* bytes)
 {
   if (addr + len < addr)
     return false;
@@ -142,12 +142,12 @@ bool sim_t::mmio_store(reg_t addr, size_t len, const uint8_t* bytes)
 
 void sim_t::make_config_string()
 {
-  reg_t rtc_addr = EXT_IO_BASE;
+  word_t rtc_addr = EXT_IO_BASE;
   bus.add_device(rtc_addr, rtc.get());
 
   const int align = 0x1000;
-  reg_t cpu_addr = rtc_addr + ((rtc->size() - 1) / align + 1) * align;
-  reg_t cpu_size = align;
+  word_t cpu_addr = rtc_addr + ((rtc->size() - 1) / align + 1) * align;
+  word_t cpu_size = align;
 
   uint32_t reset_vec[8] = {
     0x297 + DRAM_BASE - DEFAULT_RSTVEC, // reset vector

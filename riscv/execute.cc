@@ -35,7 +35,7 @@ static void commit_log_print_insn(state_t* state, reg_t pc, insn_t insn)
 inline void processor_t::update_histogram(reg_t pc)
 {
 #ifdef RISCV_ENABLE_HISTOGRAM
-  pc_histogram[pc]++;
+  pc_histogram[pc.data]++;
 #endif
 }
 
@@ -60,7 +60,7 @@ void processor_t::step(size_t n)
 
     #define advance_pc() \
      if (unlikely(invalid_pc(pc))) { \
-       switch (pc) { \
+       switch (pc.data) { \
          case PC_SERIALIZE_BEFORE: state.serialized = true; break; \
          case PC_SERIALIZE_AFTER: instret++; break; \
          default: abort(); \
@@ -80,7 +80,7 @@ void processor_t::step(size_t n)
       {
         while (instret < n)
         {
-          insn_fetch_t fetch = mmu->load_insn(pc);
+          insn_fetch_t fetch = mmu->load_insn(pc.data);
           if (!state.serialized)
             disasm(fetch.insn);
           pc = execute_insn(this, pc, fetch);
@@ -89,15 +89,15 @@ void processor_t::step(size_t n)
       }
       else while (instret < n)
       {
-        size_t idx = _mmu->icache_index(pc);
-        auto ic_entry = _mmu->access_icache(pc);
+        size_t idx = _mmu->icache_index(pc.data);
+        auto ic_entry = _mmu->access_icache(pc.data);
 
         #define ICACHE_ACCESS(i) { \
           insn_fetch_t fetch = ic_entry->data; \
           ic_entry++; \
           pc = execute_insn(this, pc, fetch); \
           if (i == mmu_t::ICACHE_ENTRIES-1) break; \
-          if (unlikely(ic_entry->tag != pc)) goto miss; \
+          if (unlikely(ic_entry->tag != pc.data)) goto miss; \
           if (unlikely(instret+1 == n)) break; \
           instret++; \
           state.pc = pc; \
@@ -113,8 +113,8 @@ void processor_t::step(size_t n)
 miss:
         advance_pc();
         // refill I$ if it looks like there wasn't a taken branch
-        if (pc > (ic_entry-1)->tag && pc <= (ic_entry-1)->tag + MAX_INSN_LENGTH)
-          _mmu->refill_icache(pc, ic_entry);
+        if (pc.data > (ic_entry-1)->tag && pc.data <= (ic_entry-1)->tag + MAX_INSN_LENGTH)
+          _mmu->refill_icache(pc.data, ic_entry);
       }
     }
     catch(trap_t& t)

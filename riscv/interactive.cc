@@ -168,7 +168,7 @@ reg_t sim_t::get_pc(const std::vector<std::string>& args)
 
 void sim_t::interactive_pc(const std::string& cmd, const std::vector<std::string>& args)
 {
-  fprintf(stderr, "0x%016" PRIx64 "\n", get_pc(args));
+  fprintf(stderr, "0x%016" PRIx64 "\n", get_pc(args).data);
 }
 
 reg_t sim_t::get_reg(const std::vector<std::string>& args)
@@ -218,20 +218,20 @@ void sim_t::interactive_reg(const std::string& cmd, const std::vector<std::strin
     processor_t *p = get_core(args[0]);
 
     for (int r = 0; r < NXPR; ++r) {
-      fprintf(stderr, "%-4s: 0x%016" PRIx64 "  ", xpr_name[r], p->state.XPR[r]);
+      fprintf(stderr, "%-4s: 0x%016" PRIx64 "  ", xpr_name[r], p->state.XPR[r].data);
       if ((r + 1) % 4 == 0)
         fprintf(stderr, "\n");
     }
   } else
-    fprintf(stderr, "0x%016" PRIx64 "\n", get_reg(args));
+    fprintf(stderr, "0x%016" PRIx64 "\n", get_reg(args).data);
 }
 
-union fpr
+typedef struct
 {
   reg_t r;
   float s;
   double d;
-};
+} fpr;
 
 void sim_t::interactive_fregs(const std::string& cmd, const std::vector<std::string>& args)
 {
@@ -261,7 +261,8 @@ reg_t sim_t::get_mem(const std::vector<std::string>& args)
     addr_str = args[1];
   }
 
-  reg_t addr = strtol(addr_str.c_str(),NULL,16), val;
+  word_t addr = strtol(addr_str.c_str(),NULL,16);
+  reg_t val;
   if(addr == LONG_MAX)
     addr = strtoul(addr_str.c_str(),NULL,16);
 
@@ -281,12 +282,12 @@ reg_t sim_t::get_mem(const std::vector<std::string>& args)
       val = mmu->load_uint8(addr);
       break;
   }
-  return val;
+  return reg_t(val);
 }
 
 void sim_t::interactive_mem(const std::string& cmd, const std::vector<std::string>& args)
 {
-  fprintf(stderr, "0x%016" PRIx64 "\n", get_mem(args));
+  fprintf(stderr, "0x%016" PRIx64 "\n", get_mem(args).data);
 }
 
 void sim_t::interactive_str(const std::string& cmd, const std::vector<std::string>& args)
@@ -294,10 +295,10 @@ void sim_t::interactive_str(const std::string& cmd, const std::vector<std::strin
   if(args.size() != 1)
     throw trap_illegal_instruction();
 
-  reg_t addr = strtol(args[0].c_str(),NULL,16);
+  word_t addr = strtol(args[0].c_str(),NULL,16);
 
   char ch;
-  while((ch = debug_mmu->load_uint8(addr++)))
+  while((ch = debug_mmu->load_uint8(addr++).data))
     putchar(ch);
 
   putchar('\n');
@@ -310,7 +311,7 @@ void sim_t::interactive_until(const std::string& cmd, const std::vector<std::str
   if(args.size() < 3)
     return;
 
-  reg_t val = strtol(args[args.size()-1].c_str(),NULL,16);
+  word_t val = strtol(args[args.size()-1].c_str(),NULL,16);
   if(val == LONG_MAX)
     val = strtoul(args[args.size()-1].c_str(),NULL,16);
   
@@ -331,7 +332,7 @@ void sim_t::interactive_until(const std::string& cmd, const std::vector<std::str
   {
     try
     {
-      reg_t current = (this->*func)(args2);
+      word_t current = (this->*func)(args2).data;
 
       if (cmd_until == (current == val))
         break;

@@ -11,25 +11,25 @@ struct state_t;
 class trap_t
 {
  public:
-  trap_t(reg_t which) : which(which) {}
+  trap_t(word_t which) : which(which) {}
   virtual const char* name();
   virtual bool has_badaddr() { return false; }
-  virtual reg_t get_badaddr() { abort(); }
-  reg_t cause() { return which; }
+  virtual word_t get_badaddr() { abort(); }
+  word_t cause() { return which; }
  private:
   char _name[16];
-  reg_t which;
+  word_t which;
 };
 
 class mem_trap_t : public trap_t
 {
  public:
-  mem_trap_t(reg_t which, reg_t badaddr)
+  mem_trap_t(word_t which, word_t badaddr)
     : trap_t(which), badaddr(badaddr) {}
   bool has_badaddr() override { return true; }
-  reg_t get_badaddr() override { return badaddr; }
+  word_t get_badaddr() override { return badaddr; }
  private:
-  reg_t badaddr;
+  word_t badaddr;
 };
 
 #define DECLARE_TRAP(n, x) class trap_##x : public trap_t { \
@@ -40,7 +40,7 @@ class mem_trap_t : public trap_t
 
 #define DECLARE_MEM_TRAP(n, x) class trap_##x : public mem_trap_t { \
  public: \
-  trap_##x(reg_t badaddr) : mem_trap_t(n, badaddr) {} \
+  trap_##x(word_t badaddr) : mem_trap_t(n, badaddr) {} \
   const char* name() { return "trap_"#x; } \
 };
 

@@ -29,12 +29,12 @@ void mmu_t::flush_tlb()
   flush_icache();
 }
 
-reg_t mmu_t::translate(reg_t addr, access_type type)
+word_t mmu_t::translate(word_t addr, access_type type)
 {
   if (!proc)
     return addr;
 
-  reg_t mode = proc->state.prv;
+  word_t mode = proc->state.prv;
   bool pum = false;
   if (type != FETCH) {
     if (get_field(proc->state.mstatus, MSTATUS_MPRV))
@@ -45,15 +45,15 @@ reg_t mmu_t::translate(reg_t addr, access_type type)
     mode = PRV_M;
 
   if (mode == PRV_M) {
-    reg_t msb_mask = (reg_t(2) << (proc->xlen-1))-1; // zero-extend from xlen
+    word_t msb_mask = (word_t(2) << (proc->xlen-1))-1; // zero-extend from xlen
     return addr & msb_mask;
   }
   return walk(addr, type, mode > PRV_U, pum) | (addr & (PGSIZE-1));
 }
 
-const uint16_t* mmu_t::fetch_slow_path(reg_t addr)
+const uint16_t* mmu_t::fetch_slow_path(word_t addr)
 {
-  reg_t paddr = translate(addr, FETCH);
+  word_t paddr = translate(addr, FETCH);
   if (sim->addr_is_mem(paddr)) {
     refill_tlb(addr, paddr, FETCH);
     return (const uint16_t*)sim->addr_to_mem(paddr);
@@ -64,11 +64,11 @@ const uint16_t* mmu_t::fetch_slow_path(reg_t addr)
   }
 }
 
-void mmu_t::load_slow_path(reg_t addr, reg_t len, uint8_t* bytes)
+void mmu_t::load_slow_path(word_t addr, word_t len, uint8_t* bytes)
 {
-  reg_t paddr = translate(addr, LOAD);
+  word_t paddr = translate(addr, LOAD);
   if (sim->addr_is_mem(paddr)) {
-    memcpy(bytes, sim->addr_to_mem(paddr), len);
+    memcpy(&bytes, sim->addr_to_mem(paddr), len);
     if (tracer.interested_in_range(paddr, paddr + PGSIZE, LOAD))
       tracer.trace(paddr, len, LOAD);
     else
@@ -78,9 +78,9 @@ void mmu_t::load_slow_path(reg_t addr, reg_t len, uint8_t* bytes)
   }
 }
 
-void mmu_t::store_slow_path(reg_t addr, reg_t len, const uint8_t* bytes)
+void mmu_t::store_slow_path(word_t addr, word_t len, const uint8_t* bytes)
 {
-  reg_t paddr = translate(addr, STORE);
+  word_t paddr = translate(addr, STORE);
   if (sim->addr_is_mem(paddr)) {
     memcpy(sim->addr_to_mem(paddr), bytes, len);
     if (tracer.interested_in_range(paddr, paddr + PGSIZE, STORE))
@@ -92,10 +92,10 @@ void mmu_t::store_slow_path(reg_t addr, reg_t len, const uint8_t* bytes)
   }
 }
 
-void mmu_t::refill_tlb(reg_t vaddr, reg_t paddr, access_type type)
+void mmu_t::refill_tlb(word_t vaddr, word_t paddr, access_type type)
 {
-  reg_t idx = (vaddr >> PGSHIFT) % TLB_ENTRIES;
-  reg_t expected_tag = vaddr >> PGSHIFT;
+  word_t idx = (vaddr >> PGSHIFT) % TLB_ENTRIES;
+  word_t expected_tag = vaddr >> PGSHIFT;
 
   if (tlb_load_tag[idx] != expected_tag) tlb_load_tag[idx] = -1;
   if (tlb_store_tag[idx] != expected_tag) tlb_store_tag[idx] = -1;
@@ -108,7 +108,7 @@ void mmu_t::refill_tlb(reg_t vaddr, reg_t paddr, access_type type)
   tlb_data[idx] = sim->addr_to_mem(paddr) - vaddr;
 }
 
-reg_t mmu_t::walk(reg_t addr, access_type type, bool supervisor, bool pum)
+word_t mmu_t::walk(word_t addr, access_type type, bool supervisor, bool pum)
 {
   int levels, ptidxbits, ptesize;
   switch (get_field(proc->get_state()->mstatus, MSTATUS_VM))
@@ -121,24 +121,24 @@ reg_t mmu_t::walk(reg_t addr, access_type type, bool supervisor, bool pum)
 
   // verify bits xlen-1:va_bits-1 are all equal
   int va_bits = PGSHIFT + levels * ptidxbits;
-  reg_t mask = (reg_t(1) << (proc->xlen - (va_bits-1))) - 1;
-  reg_t masked_msbs = (addr >> (va_bits-1)) & mask;
+  word_t mask = (word_t(1) << (proc->xlen - (va_bits-1))) - 1;
+  word_t masked_msbs = (addr >> (va_bits-1)) & mask;
   if (masked_msbs != 0 && masked_msbs != mask)
     return -1;
 
-  reg_t base = proc->get_state()->sptbr << PGSHIFT;
+  word_t base = proc->get_state()->sptbr << PGSHIFT;
   int ptshift = (levels - 1) * ptidxbits;
   for (int i = 0; i < levels; i++, ptshift -= ptidxbits) {
-    reg_t idx = (addr >> (PGSHIFT + ptshift)) & ((1 << ptidxbits) - 1);
+    word_t idx = (addr >> (PGSHIFT + ptshift)) & ((1 << ptidxbits) - 1);
 
     // check that physical address of PTE is legal
-    reg_t pte_addr = base + idx * ptesize;
+    word_t pte_addr = base + idx * ptesize;
     if (!sim->addr_is_mem(pte_addr))
       break;
 
     void* ppte = sim->addr_to_mem(pte_addr);
-    reg_t pte = ptesize == 4 ? *(uint32_t*)ppte : *(uint64_t*)ppte;
-    reg_t ppn = pte >> PTE_PPN_SHIFT;
+    word_t pte = ptesize == 4 ? *(uint32_t*)ppte : *(uint64_t*)ppte;
+    word_t ppn = pte >> PTE_PPN_SHIFT;
 
     if (PTE_TABLE(pte)) { // next level of page table
       base = ppn << PGSHIFT;
@@ -150,8 +150,8 @@ reg_t mmu_t::walk(reg_t addr, access_type type, bool supervisor, bool pum)
       // set referenced and possibly dirty bits.
       *(uint32_t*)ppte |= PTE_R | ((type == STORE) * PTE_D);
       // for superpage mappings, make a fake leaf PTE for the TLB's benefit.
-      reg_t vpn = addr >> PGSHIFT;
-      return (ppn | (vpn & ((reg_t(1) << ptshift) - 1))) << PGSHIFT;
+      word_t vpn = addr >> PGSHIFT;
+      return (ppn | (vpn & ((word_t(1) << ptshift) - 1))) << PGSHIFT;
     }
   }
 

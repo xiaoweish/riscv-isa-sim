@@ -1,1 +1,1 @@
-WRITE_RD(sext_xlen(RS1 + insn.i_imm()));
+WRITE_RD(reg_t(sext_xlen(RS1.data + insn.i_imm())));

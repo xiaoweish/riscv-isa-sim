@@ -48,9 +48,9 @@ void htif_isasim_t::tick_once()
 
       uint64_t buf[hdr.data_size];
       for (size_t i = 0; i < hdr.data_size; i++) {
-        reg_t addr = (hdr.addr + i) * HTIF_DATA_ALIGN;
+        word_t addr = (hdr.addr + i) * HTIF_DATA_ALIGN;
         try {
-          buf[i] = sim->debug_mmu->load_uint64(addr);
+          buf[i] = sim->debug_mmu->load_uint64(addr).data;
         } catch (trap_load_access_fault& e) {
           fprintf(stderr, "HTIF: attempt to read from illegal address 0x%" PRIx64 "\n", addr);
           exit(-1);
@@ -63,7 +63,7 @@ void htif_isasim_t::tick_once()
     {
       const uint64_t* buf = (const uint64_t*)p.get_payload();
       for (size_t i = 0; i < hdr.data_size; i++) {
-        reg_t addr = (hdr.addr + i) * HTIF_DATA_ALIGN;
+        word_t addr = (hdr.addr + i) * HTIF_DATA_ALIGN;
         try {
           sim->debug_mmu->store_uint64(addr, buf[i]);
         } catch (trap_load_access_fault& e) {
@@ -79,8 +79,8 @@ void htif_isasim_t::tick_once()
     case HTIF_CMD_WRITE_CONTROL_REG:
     {
       assert(hdr.data_size == 1);
-      reg_t coreid = hdr.addr >> 20;
-      reg_t regno = hdr.addr & ((1<<20)-1);
+      word_t coreid = hdr.addr >> 20;
+      word_t regno = hdr.addr & ((1<<20)-1);
       uint64_t old_val, new_val = 0 /* shut up gcc */;
 
       packet_header_t ack(HTIF_CMD_ACK, seqno, 1, 0);

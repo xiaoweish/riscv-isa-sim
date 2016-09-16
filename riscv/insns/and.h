@@ -1,1 +1,1 @@
-WRITE_RD(RS1 & RS2);
+WRITE_RD(reg_t(RS1.data & RS2.data));

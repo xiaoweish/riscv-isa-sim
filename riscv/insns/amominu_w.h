@@ -1,4 +1,4 @@
 require_extension('A');
-uint32_t v = MMU.load_int32(RS1);
-MMU.store_uint32(RS1, std::min(uint32_t(RS2),v));
-WRITE_RD((int32_t)v);
+reg_t v = MMU.load_int32(RS1.data);
+MMU.store_uint32(RS1.data, std::min(uint32_t(RS2.data),(uint32_t)(v.data)));
+WRITE_RD(v);

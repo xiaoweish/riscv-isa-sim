@@ -64,10 +64,10 @@ void processor_t::parse_isa_string(const char* str)
   const char* all_subsets = "imafdc";
 
   max_xlen = 64;
-  isa = reg_t(2) << 62;
+  isa = word_t(2) << 62;
 
   if (strncmp(p, "rv32", 4) == 0)
-    max_xlen = 32, isa = reg_t(1) << 30, p += 4;
+    max_xlen = 32, isa = word_t(1) << 30, p += 4;
   else if (strncmp(p, "rv64", 4) == 0)
     p += 4;
   else if (strncmp(p, "rv", 2) == 0)
@@ -114,7 +114,7 @@ void state_t::reset()
 {
   memset(this, 0, sizeof(*this));
   prv = PRV_M;
-  pc = DEFAULT_RSTVEC;
+  pc = reg_t(DEFAULT_RSTVEC);
   mtvec = DEFAULT_MTVEC;
   load_reservation = -1;
 }
@@ -150,12 +150,12 @@ void processor_t::reset(bool value)
     ext->reset(); // reset the extension
 }
 
-void processor_t::raise_interrupt(reg_t which)
+void processor_t::raise_interrupt(word_t which)
 {
-  throw trap_t(((reg_t)1 << (max_xlen-1)) | which);
+  throw trap_t(((word_t)1 << (max_xlen-1)) | which);
 }
 
-static int ctz(reg_t val)
+static int ctz(word_t val)
 {
   int res = 0;
   if (val)
@@ -166,26 +166,26 @@ static int ctz(reg_t val)
 
 void processor_t::take_interrupt()
 {
-  reg_t pending_interrupts = state.mip & state.mie;
+  word_t pending_interrupts = state.mip & state.mie;
 
-  reg_t mie = get_field(state.mstatus, MSTATUS_MIE);
-  reg_t m_enabled = state.prv < PRV_M || (state.prv == PRV_M && mie);
-  reg_t enabled_interrupts = pending_interrupts & ~state.mideleg & -m_enabled;
+  word_t mie = get_field(state.mstatus, MSTATUS_MIE);
+  word_t m_enabled = state.prv < PRV_M || (state.prv == PRV_M && mie);
+  word_t enabled_interrupts = pending_interrupts & ~state.mideleg & -m_enabled;
 
-  reg_t sie = get_field(state.mstatus, MSTATUS_SIE);
-  reg_t s_enabled = state.prv < PRV_S || (state.prv == PRV_S && sie);
+  word_t sie = get_field(state.mstatus, MSTATUS_SIE);
+  word_t s_enabled = state.prv < PRV_S || (state.prv == PRV_S && sie);
   enabled_interrupts |= pending_interrupts & state.mideleg & -s_enabled;
 
   if (enabled_interrupts)
     raise_interrupt(ctz(enabled_interrupts));
 }
 
-static bool validate_priv(reg_t priv)
+static bool validate_priv(word_t priv)
 {
   return priv == PRV_U || priv == PRV_S || priv == PRV_M;
 }
 
-void processor_t::set_privilege(reg_t prv)
+void processor_t::set_privilege(word_t prv)
 {
   assert(validate_priv(prv));
   mmu->flush_tlb();
@@ -196,22 +196,22 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
 {
   if (debug)
     fprintf(stderr, "core %3d: exception %s, epc 0x%016" PRIx64 "\n",
-            id, t.name(), epc);
+            id, t.name(), epc.data);
 
   // by default, trap to M-mode, unless delegated to S-mode
-  reg_t bit = t.cause();
-  reg_t deleg = state.medeleg;
-  if (bit & ((reg_t)1 << (max_xlen-1)))
-    deleg = state.mideleg, bit &= ~((reg_t)1 << (max_xlen-1));
+  word_t bit = t.cause();
+  word_t deleg = state.medeleg;
+  if (bit & ((word_t)1 << (max_xlen-1)))
+    deleg = state.mideleg, bit &= ~((word_t)1 << (max_xlen-1));
   if (state.prv <= PRV_S && bit < max_xlen && ((deleg >> bit) & 1)) {
     // handle the trap in S-mode
     state.pc = state.stvec;
     state.scause = t.cause();
-    state.sepc = epc;
+    state.sepc = epc.data;
     if (t.has_badaddr())
       state.sbadaddr = t.get_badaddr();
 
-    reg_t s = state.mstatus;
+    word_t s = state.mstatus;
     s = set_field(s, MSTATUS_SPIE, get_field(s, MSTATUS_UIE << state.prv));
     s = set_field(s, MSTATUS_SPP, state.prv);
     s = set_field(s, MSTATUS_SIE, 0);
@@ -220,11 +220,11 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
   } else {
     state.pc = state.mtvec;
     state.mcause = t.cause();
-    state.mepc = epc;
+    state.mepc = epc.data;
     if (t.has_badaddr())
       state.mbadaddr = t.get_badaddr();
 
-    reg_t s = state.mstatus;
+    word_t s = state.mstatus;
     s = set_field(s, MSTATUS_MPIE, get_field(s, MSTATUS_UIE << state.prv));
     s = set_field(s, MSTATUS_MPP, state.prv);
     s = set_field(s, MSTATUS_MIE, 0);
@@ -239,10 +239,10 @@ void processor_t::disasm(insn_t insn)
 {
   uint64_t bits = insn.bits() & ((1ULL << (8 * insn_length(insn.bits()))) - 1);
   fprintf(stderr, "core %3d: 0x%016" PRIx64 " (0x%08" PRIx64 ") %s\n",
-          id, state.pc, bits, disassembler->disassemble(insn).c_str());
+          id, state.pc.data, bits, disassembler->disassemble(insn).c_str());
 }
 
-static bool validate_vm(int max_xlen, reg_t vm)
+static bool validate_vm(int max_xlen, word_t vm)
 {
   if (max_xlen == 64 && (vm == VM_SV39 || vm == VM_SV48))
     return true;
@@ -251,11 +251,11 @@ static bool validate_vm(int max_xlen, reg_t vm)
   return vm == VM_MBARE;
 }
 
-void processor_t::set_csr(int which, reg_t val)
+void processor_t::set_csr(int which, word_t val)
 {
   val = zext_xlen(val);
-  reg_t delegable_ints = MIP_SSIP | MIP_STIP | (1 << IRQ_COP);
-  reg_t all_ints = delegable_ints | MIP_MSIP | MIP_MTIP;
+  word_t delegable_ints = MIP_SSIP | MIP_STIP | (1 << IRQ_COP);
+  word_t all_ints = delegable_ints | MIP_MSIP | MIP_MTIP;
   switch (which)
   {
     case CSR_FFLAGS:
@@ -276,7 +276,7 @@ void processor_t::set_csr(int which, reg_t val)
           (MSTATUS_VM | MSTATUS_MPP | MSTATUS_MPRV | MSTATUS_PUM))
         mmu->flush_tlb();
 
-      reg_t mask = MSTATUS_SIE | MSTATUS_SPIE | MSTATUS_MIE | MSTATUS_MPIE
+      word_t mask = MSTATUS_SIE | MSTATUS_SPIE | MSTATUS_MIE | MSTATUS_MPIE
                  | MSTATUS_SPP | MSTATUS_FS | MSTATUS_MPRV | MSTATUS_PUM
                  | (ext ? MSTATUS_XS : 0);
 
@@ -300,7 +300,7 @@ void processor_t::set_csr(int which, reg_t val)
       break;
     }
     case CSR_MIP: {
-      reg_t mask = MIP_SSIP | MIP_STIP;
+      word_t mask = MIP_SSIP | MIP_STIP;
       state.mip = (state.mip & ~mask) | (val & mask);
       break;
     }
@@ -311,7 +311,7 @@ void processor_t::set_csr(int which, reg_t val)
       state.mideleg = (state.mideleg & ~delegable_ints) | (val & delegable_ints);
       break;
     case CSR_MEDELEG: {
-      reg_t mask = 0;
+      word_t mask = 0;
 #define DECLARE_CAUSE(name, value) mask |= 1ULL << (value);
 #include "encoding.h"
 #undef DECLARE_CAUSE
@@ -325,7 +325,7 @@ void processor_t::set_csr(int which, reg_t val)
       state.mscounteren = val & 7;
       break;
     case CSR_SSTATUS: {
-      reg_t mask = SSTATUS_SIE | SSTATUS_SPIE | SSTATUS_SPP | SSTATUS_FS
+      word_t mask = SSTATUS_SIE | SSTATUS_SPIE | SSTATUS_SPP | SSTATUS_FS
                  | SSTATUS_XS | SSTATUS_PUM;
       return set_csr(CSR_MSTATUS, (state.mstatus & ~mask) | (val & mask));
     }
@@ -349,7 +349,7 @@ void processor_t::set_csr(int which, reg_t val)
   }
 }
 
-reg_t processor_t::get_csr(int which)
+word_t processor_t::get_csr(int which)
 {
   switch (which)
   {
@@ -399,9 +399,9 @@ reg_t processor_t::get_csr(int which)
     case CSR_MCYCLEH: if (xlen > 32) break; else return state.minstret >> 32;
     case CSR_MINSTRETH: if (xlen > 32) break; else return state.minstret >> 32;
     case CSR_SSTATUS: {
-      reg_t mask = SSTATUS_SIE | SSTATUS_SPIE | SSTATUS_SPP | SSTATUS_FS
+      word_t mask = SSTATUS_SIE | SSTATUS_SPIE | SSTATUS_SPP | SSTATUS_FS
                  | SSTATUS_XS | SSTATUS_PUM;
-      reg_t sstatus = state.mstatus & mask;
+      word_t sstatus = state.mstatus & mask;
       if ((sstatus & SSTATUS_FS) == SSTATUS_FS ||
           (sstatus & SSTATUS_XS) == SSTATUS_XS)
         sstatus |= (xlen == 32 ? SSTATUS32_SD : SSTATUS64_SD);
@@ -508,7 +508,7 @@ void processor_t::register_extension(extension_t* x)
 void processor_t::register_base_instructions()
 {
   #define DECLARE_INSN(name, match, mask) \
-    insn_bits_t name##_match = (match), name##_mask = (mask);
+    word_t name##_match = (match), name##_mask = (mask);
   #include "encoding.h"
   #undef DECLARE_INSN
 
@@ -521,12 +521,12 @@ void processor_t::register_base_instructions()
   build_opcode_map();
 }
 
-bool processor_t::load(reg_t addr, size_t len, uint8_t* bytes)
+bool processor_t::load(word_t addr, size_t len, uint8_t* bytes)
 {
   return false;
 }
 
-bool processor_t::store(reg_t addr, size_t len, const uint8_t* bytes)
+bool processor_t::store(word_t addr, size_t len, const uint8_t* bytes)
 {
   switch (addr)
   {

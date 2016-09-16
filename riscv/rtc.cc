@@ -6,7 +6,7 @@ rtc_t::rtc_t(std::vector<processor_t*>& procs)
 {
 }
 
-bool rtc_t::load(reg_t addr, size_t len, uint8_t* bytes)
+bool rtc_t::load(word_t addr, size_t len, uint8_t* bytes)
 {
   if (addr + len > size())
     return false;
@@ -14,7 +14,7 @@ bool rtc_t::load(reg_t addr, size_t len, uint8_t* bytes)
   return true;
 }
 
-bool rtc_t::store(reg_t addr, size_t len, const uint8_t* bytes)
+bool rtc_t::store(word_t addr, size_t len, const uint8_t* bytes)
 {
   if (addr + len > size() || addr < 8)
     return false;
@@ -23,7 +23,7 @@ bool rtc_t::store(reg_t addr, size_t len, const uint8_t* bytes)
   return true;
 }
 
-void rtc_t::increment(reg_t inc)
+void rtc_t::increment(word_t inc)
 {
   regs[0] += inc;
   for (size_t i = 0; i < procs.size(); i++) {

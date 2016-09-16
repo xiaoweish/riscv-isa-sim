@@ -19,16 +19,16 @@ class disassembler_t;
 
 struct insn_desc_t
 {
-  insn_bits_t match;
-  insn_bits_t mask;
+  word_t match;
+  word_t mask;
   insn_func_t rv32;
   insn_func_t rv64;
 };
 
 struct commit_log_reg_t
 {
-  reg_t addr;
-  reg_t data;
+  word_t addr;
+  word_t data;
 };
 
 // architectural state of a RISC-V hart
@@ -41,35 +41,35 @@ struct state_t
   regfile_t<freg_t, NFPR, false> FPR;
 
   // control and status registers
-  reg_t prv;
-  reg_t mstatus;
-  reg_t mepc;
-  reg_t mbadaddr;
-  reg_t mscratch;
-  reg_t mtvec;
-  reg_t mcause;
-  reg_t minstret;
-  reg_t mie;
-  reg_t mip;
-  reg_t medeleg;
-  reg_t mideleg;
-  reg_t mucounteren;
-  reg_t mscounteren;
-  reg_t sepc;
-  reg_t sbadaddr;
-  reg_t sscratch;
-  reg_t stvec;
-  reg_t sptbr;
-  reg_t scause;
+  word_t prv;
+  word_t mstatus;
+  word_t mepc;
+  word_t mbadaddr;
+  word_t mscratch;
+  word_t mtvec;
+  word_t mcause;
+  word_t minstret;
+  word_t mie;
+  word_t mip;
+  word_t medeleg;
+  word_t mideleg;
+  word_t mucounteren;
+  word_t mscounteren;
+  word_t sepc;
+  word_t sbadaddr;
+  word_t sscratch;
+  word_t stvec;
+  word_t sptbr;
+  word_t scause;
   uint32_t fflags;
   uint32_t frm;
   bool serialized; // whether timer CSRs are in a well-defined state
 
-  reg_t load_reservation;
+  word_t load_reservation;
 
 #ifdef RISCV_ENABLE_COMMITLOG
   commit_log_reg_t log_reg_write;
-  reg_t last_inst_priv;
+  word_t last_inst_priv;
 #endif
 };
 
@@ -85,9 +85,9 @@ public:
   void reset(bool value);
   void step(size_t n); // run for n cycles
   bool running() { return run; }
-  void set_csr(int which, reg_t val);
-  void raise_interrupt(reg_t which);
-  reg_t get_csr(int which);
+  void set_csr(int which, word_t val);
+  void raise_interrupt(word_t which);
+  word_t get_csr(int which);
   mmu_t* get_mmu() { return mmu; }
   state_t* get_state() { return &state; }
   extension_t* get_extension() { return ext; }
@@ -95,16 +95,16 @@ public:
     if (ext >= 'a' && ext <= 'z') ext += 'A' - 'a';
     return ext >= 'A' && ext <= 'Z' && ((isa >> (ext - 'A')) & 1);
   }
-  void set_privilege(reg_t);
-  void yield_load_reservation() { state.load_reservation = (reg_t)-1; }
+  void set_privilege(word_t);
+  void yield_load_reservation() { state.load_reservation = (word_t)-1; }
   void update_histogram(reg_t pc);
 
   void register_insn(insn_desc_t);
   void register_extension(extension_t*);
 
   // MMIO slave interface
-  bool load(reg_t addr, size_t len, uint8_t* bytes);
-  bool store(reg_t addr, size_t len, const uint8_t* bytes);
+  bool load(word_t addr, size_t len, uint8_t* bytes);
+  bool store(word_t addr, size_t len, const uint8_t* bytes);
 
 private:
   sim_t* sim;
@@ -115,14 +115,14 @@ private:
   uint32_t id;
   unsigned max_xlen;
   unsigned xlen;
-  reg_t isa;
+  word_t isa;
   std::string isa_string;
   bool run; // !reset
   bool debug;
   bool histogram_enabled;
 
   std::vector<insn_desc_t> instructions;
-  std::map<reg_t,uint64_t> pc_histogram;
+  std::map<word_t,uint64_t> pc_histogram;
 
   static const size_t OPCODE_CACHE_SIZE = 8191;
   insn_desc_t opcode_cache[OPCODE_CACHE_SIZE];

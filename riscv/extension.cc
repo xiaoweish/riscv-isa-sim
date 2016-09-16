@@ -14,8 +14,8 @@ void extension_t::illegal_instruction()
 
 void extension_t::raise_interrupt()
 {
-  reg_t prv = p->get_state()->prv;
-  reg_t mie = get_field(p->get_state()->mstatus, MSTATUS_MIE);
+  word_t prv = p->get_state()->prv;
+  word_t mie = get_field(p->get_state()->mstatus, MSTATUS_MIE);
 
   if (prv < PRV_M || (prv == PRV_M && mie))
     p->raise_interrupt(IRQ_COP);

@@ -22,10 +22,10 @@ class dummy_rocc_t : public rocc_t
       case 1: // xd <- acc (the only real work is the return statement below)
         break;
       case 2: // acc[rs2] <- Mem[xs1]
-        acc[insn.rs2] = p->get_mmu()->load_uint64(xs1);
+        acc[insn.rs2] = p->get_mmu()->load_uint64(xs1.data);
         break;
       case 3: // acc[rs2] <- accX + xs1
-        acc[insn.rs2] += xs1;
+        acc[insn.rs2].data += xs1.data;
         break;
       default:
         illegal_instruction();

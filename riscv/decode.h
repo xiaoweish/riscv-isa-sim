@@ -15,9 +15,38 @@
 #include "common.h"
 #include <cinttypes>
 
-typedef int64_t sreg_t;
-typedef uint64_t reg_t;
-typedef uint64_t freg_t;
+template <class D, class T>
+class tagged_data_t
+{
+ public:
+  D data;
+  T tag;
+
+  tagged_data_t(): tag(0) {}
+  tagged_data_t(D d, T t): data(d), tag(t) {}
+};
+
+typedef uint64_t word_t;
+typedef int64_t  sword_t;
+class sreg_t : public tagged_data_t<int64_t, uint32_t> {};
+class freg_t : public tagged_data_t<uint64_t, uint32_t>
+{
+ public:
+  freg_t(uint64_t data, uint32_t tag = 0)
+    : tagged_data_t(data, tag) {}
+  freg_t() {}
+};
+class reg_t  : public tagged_data_t<uint64_t, uint32_t>
+{
+ public:
+  reg_t(uint64_t data, uint32_t tag = 0)
+    : tagged_data_t(data, tag) {}
+  reg_t(const freg_t &freg)
+    : tagged_data_t(freg.data, freg.tag) {}
+  reg_t(const sreg_t &sreg)
+    : tagged_data_t(sreg.data, sreg.tag) {}
+  reg_t() {}
+};
 
 const int NXPR = 32;
 const int NFPR = 32;
@@ -57,18 +86,26 @@ const int NCSR = 4096;
 #define MAX_INSN_LENGTH 8
 #define PC_ALIGN 2
 
-typedef uint64_t insn_bits_t;
+class insn_bits_t : public tagged_data_t<uint64_t, uint32_t>
+{
+ public:
+  insn_bits_t(uint64_t insn, uint32_t tag = 0)
+    : tagged_data_t(insn, tag) {}
+  insn_bits_t() {}
+};
+
 class insn_t
 {
 public:
   insn_t() = default;
   insn_t(insn_bits_t bits) : b(bits) {}
-  insn_bits_t bits() { return b; }
-  int length() { return insn_length(b); }
-  int64_t i_imm() { return int64_t(b) >> 20; }
+  insn_t(word_t bits) : b(insn_bits_t(bits)) {}
+  word_t bits() { return b.data; }
+  int length() { return insn_length(b.data); }
+  int64_t i_imm() { return int64_t(b.data) >> 20; }
   int64_t s_imm() { return x(7, 5) + (xs(25, 7) << 5); }
   int64_t sb_imm() { return (x(8, 4) << 1) + (x(25,6) << 5) + (x(7,1) << 11) + (imm_sign() << 12); }
-  int64_t u_imm() { return int64_t(b) >> 12 << 12; }
+  int64_t u_imm() { return int64_t(b.data) >> 12 << 12; }
   int64_t uj_imm() { return (x(21, 10) << 1) + (x(20, 1) << 11) + (x(12, 8) << 12) + (imm_sign() << 20); }
   uint64_t rd() { return x(7, 5); }
   uint64_t rs1() { return x(15, 5); }
@@ -97,8 +134,8 @@ public:
   uint64_t rvc_rs2s() { return 8 + x(2, 3); }
 private:
   insn_bits_t b;
-  uint64_t x(int lo, int len) { return (b >> lo) & ((insn_bits_t(1) << len)-1); }
-  uint64_t xs(int lo, int len) { return int64_t(b) << (64-lo-len) >> (64-len); }
+  uint64_t x(int lo, int len) { return (b.data >> lo) & ((word_t(1) << len)-1); }
+  uint64_t xs(int lo, int len) { return word_t(b.data) << (64-lo-len) >> (64-len); }
   uint64_t imm_sign() { return xs(63, 1); }
 };
 
@@ -187,10 +224,10 @@ private:
 #define set_fp_exceptions ({ STATE.fflags |= softfloat_exceptionFlags; \
                              softfloat_exceptionFlags = 0; })
 
-#define sext32(x) ((sreg_t)(int32_t)(x))
-#define zext32(x) ((reg_t)(uint32_t)(x))
-#define sext_xlen(x) (((sreg_t)(x) << (64-xlen)) >> (64-xlen))
-#define zext_xlen(x) (((reg_t)(x) << (64-xlen)) >> (64-xlen))
+#define sext32(x) ((sword_t)(int32_t)(x))
+#define zext32(x) ((word_t)(uint32_t)(x))
+#define sext_xlen(x) (((sword_t)(x) << (64-xlen)) >> (64-xlen))
+#define zext_xlen(x) (((word_t)(x) << (64-xlen)) >> (64-xlen))
 
 #define set_pc(x) \
   do { if (unlikely(((x) & 2)) && !p->supports_extension('C')) \
@@ -207,7 +244,7 @@ private:
 /* Sentinel PC values to serialize simulator pipeline */
 #define PC_SERIALIZE_BEFORE 3
 #define PC_SERIALIZE_AFTER 5
-#define invalid_pc(pc) ((pc) & 1)
+#define invalid_pc(pc) ((pc.data) & 1)
 
 /* Convenience wrappers to simplify softfloat code sequences */
 #define f32(x) ((float32_t){(uint32_t)x})

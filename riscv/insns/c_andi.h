@@ -1,2 +1,2 @@
 require_extension('C');
-WRITE_RVC_RS1S(RVC_RS1S & insn.rvc_imm());
+WRITE_RVC_RS1S(reg_t(RVC_RS1S.data & insn.rvc_imm()));

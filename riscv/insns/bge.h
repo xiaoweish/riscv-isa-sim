@@ -1,2 +1,2 @@
-if(sreg_t(RS1) >= sreg_t(RS2))
+if(sword_t(RS1.data) >= sword_t(RS2.data))
   set_pc(BRANCH_TARGET);

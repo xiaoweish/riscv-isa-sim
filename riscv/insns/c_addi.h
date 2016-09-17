@@ -1,2 +1,2 @@
 require_extension('C');
-WRITE_RD(sext_xlen(RVC_RS1 + insn.rvc_imm()));
+WRITE_RD(reg_t(sext_xlen(RVC_RS1.data + insn.rvc_imm())));

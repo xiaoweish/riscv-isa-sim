@@ -27,6 +27,7 @@ riscv_precompiled_hdrs = \
 	insn_template.h \
 
 riscv_srcs = \
+	decode.cc \
 	htif.cc \
 	processor.cc \
 	execute.cc \

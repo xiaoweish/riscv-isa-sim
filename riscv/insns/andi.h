@@ -1,1 +1,1 @@
-WRITE_RD(insn.i_imm() & RS1);
+WRITE_RD(reg_t(insn.i_imm() & RS1.data));

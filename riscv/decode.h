@@ -28,12 +28,14 @@ class tagged_data_t
 
 typedef uint64_t word_t;
 typedef int64_t  sword_t;
+class reg_t;
 class sreg_t : public tagged_data_t<int64_t, uint32_t> {};
 class freg_t : public tagged_data_t<uint64_t, uint32_t>
 {
  public:
   freg_t(uint64_t data, uint32_t tag = 0)
     : tagged_data_t(data, tag) {}
+  freg_t(const reg_t &r);
   freg_t() {}
 };
 class reg_t  : public tagged_data_t<uint64_t, uint32_t>
@@ -41,10 +43,8 @@ class reg_t  : public tagged_data_t<uint64_t, uint32_t>
  public:
   reg_t(uint64_t data, uint32_t tag = 0)
     : tagged_data_t(data, tag) {}
-  reg_t(const freg_t &freg)
-    : tagged_data_t(freg.data, freg.tag) {}
-  reg_t(const sreg_t &sreg)
-    : tagged_data_t(sreg.data, sreg.tag) {}
+  reg_t(const freg_t &r);
+  reg_t(const sreg_t &r);
   reg_t() {}
 };
 
@@ -203,8 +203,8 @@ private:
 #define WRITE_FRD(value) WRITE_FREG(insn.rd(), value)
  
 #define SHAMT (insn.i_imm() & 0x3F)
-#define BRANCH_TARGET (pc + insn.sb_imm())
-#define JUMP_TARGET (pc + insn.uj_imm())
+#define BRANCH_TARGET (pc.data + insn.sb_imm())
+#define JUMP_TARGET (pc.data + insn.uj_imm())
 #define RM ({ int rm = insn.rm(); \
               if(rm == 7) rm = STATE.frm; \
               if(rm > 4) throw trap_illegal_instruction(); \
@@ -232,13 +232,13 @@ private:
 #define set_pc(x) \
   do { if (unlikely(((x) & 2)) && !p->supports_extension('C')) \
          throw trap_instruction_address_misaligned(x); \
-       npc = sext_xlen(x); \
+       npc = reg_t(sext_xlen(x));                      \
      } while(0)
 
 #define set_pc_and_serialize(x) \
   do { set_pc(x); /* check alignment */ \
-       npc = PC_SERIALIZE_AFTER; \
-       STATE.pc = (x); \
+       npc = reg_t(PC_SERIALIZE_AFTER); \
+       STATE.pc = reg_t(x); \
      } while(0)
 
 /* Sentinel PC values to serialize simulator pipeline */

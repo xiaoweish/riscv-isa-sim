@@ -1,9 +1,9 @@
 require_extension('A');
 require_rv64;
-if (RS1 == p->get_state()->load_reservation)
+if (RS1.data == p->get_state()->load_reservation)
 {
-  MMU.store_uint64(RS1, RS2);
-  WRITE_RD(0);
+  MMU.store_uint64(RS1.data, RS2);
+  WRITE_RD(reg_t(0));
 }
 else
-  WRITE_RD(1);
+  WRITE_RD(reg_t(1));

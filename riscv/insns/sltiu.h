@@ -1,1 +1,1 @@
-WRITE_RD(RS1 < reg_t(insn.i_imm()));
+WRITE_RD(reg_t(RS1.data < word_t(insn.i_imm())));

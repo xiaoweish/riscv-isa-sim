@@ -1,3 +1,3 @@
 require_extension('D');
 require_fp;
-WRITE_FRD((FRS1 &~ INT64_MIN) | (FRS2 & INT64_MIN));
+WRITE_FRD(freg_t((FRS1.data &~ INT64_MIN) | (FRS2.data & INT64_MIN)));

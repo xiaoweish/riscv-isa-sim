@@ -226,24 +226,24 @@ void sim_t::interactive_reg(const std::string& cmd, const std::vector<std::strin
     fprintf(stderr, "0x%016" PRIx64 "\n", get_reg(args).data);
 }
 
-typedef struct
+union fpr
 {
-  reg_t r;
+  word_t r;
   float s;
   double d;
-} fpr;
+};
 
 void sim_t::interactive_fregs(const std::string& cmd, const std::vector<std::string>& args)
 {
   fpr f;
-  f.r = get_freg(args);
+  f.r = get_freg(args).data;
   fprintf(stderr, "%g\n",f.s);
 }
 
 void sim_t::interactive_fregd(const std::string& cmd, const std::vector<std::string>& args)
 {
   fpr f;
-  f.r = get_freg(args);
+  f.r = get_freg(args).data;
   fprintf(stderr, "%g\n",f.d);
 }
 

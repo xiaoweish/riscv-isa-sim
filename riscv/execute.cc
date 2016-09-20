@@ -4,7 +4,6 @@
 #include "mmu.h"
 #include <cassert>
 
-
 static void commit_log_stash_privilege(state_t* state)
 {
 #ifdef RISCV_ENABLE_COMMITLOG
@@ -18,15 +17,16 @@ static void commit_log_print_insn(state_t* state, reg_t pc, insn_t insn)
   int32_t priv = state->last_inst_priv;
   uint64_t mask = (insn.length() == 8 ? uint64_t(0) : (uint64_t(1) << (insn.length() * 8))) - 1;
   if (state->log_reg_write.addr) {
-    fprintf(stderr, "%1d 0x%016" PRIx64 " (0x%08" PRIx64 ") %c%2" PRIu64 " 0x%016" PRIx64 "\n",
+    fprintf(stderr, "%1d 0x%016" PRIx64 " (0x%08" PRIx64 ") %c%2" PRIu64 " 0x%016" PRIx64 "     DASM(0x%08" PRIx64 ") \n",
             priv,
-            pc,
+            pc.data,
             insn.bits() & mask,
             state->log_reg_write.addr & 1 ? 'f' : 'x',
             state->log_reg_write.addr >> 1,
-            state->log_reg_write.data);
+            state->log_reg_write.data,
+            insn.bits() & mask);
   } else {
-    fprintf(stderr, "%1d 0x%016" PRIx64 " (0x%08" PRIx64 ")\n", priv, pc, insn.bits() & mask);
+    fprintf(stderr, "%1d 0x%016" PRIx64 " (0x%08" PRIx64 ")                            DASM(0x%08" PRIx64 ") \n", priv, pc.data, insn.bits() & mask, insn.bits() & mask);
   }
   state->log_reg_write.addr = 0;
 #endif

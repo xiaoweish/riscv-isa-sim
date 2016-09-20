@@ -28,20 +28,22 @@ class tagged_data_t
 
 typedef uint64_t word_t;
 typedef int64_t  sword_t;
+typedef uint64_t fword_t;
+typedef uint64_t insn_word_t;
 class reg_t;
-class sreg_t : public tagged_data_t<int64_t, uint32_t> {};
-class freg_t : public tagged_data_t<uint64_t, uint32_t>
+class sreg_t : public tagged_data_t<sword_t, uint32_t> {};
+class freg_t : public tagged_data_t<fword_t, uint32_t>
 {
  public:
-  freg_t(uint64_t data, uint32_t tag = 0)
+  freg_t(fword_t data, uint32_t tag = 0)
     : tagged_data_t(data, tag) {}
   freg_t(const reg_t &r);
   freg_t() {}
 };
-class reg_t  : public tagged_data_t<uint64_t, uint32_t>
+class reg_t  : public tagged_data_t<word_t, uint32_t>
 {
  public:
-  reg_t(uint64_t data, uint32_t tag = 0)
+  reg_t(word_t data, uint32_t tag = 0)
     : tagged_data_t(data, tag) {}
   reg_t(const freg_t &r);
   reg_t(const sreg_t &r);
@@ -86,10 +88,10 @@ const int NCSR = 4096;
 #define MAX_INSN_LENGTH 8
 #define PC_ALIGN 2
 
-class insn_bits_t : public tagged_data_t<uint64_t, uint32_t>
+class insn_bits_t : public tagged_data_t<insn_word_t, uint32_t>
 {
  public:
-  insn_bits_t(uint64_t insn, uint32_t tag = 0)
+  insn_bits_t(insn_word_t insn, uint32_t tag = 0)
     : tagged_data_t(insn, tag) {}
   insn_bits_t() {}
 };
@@ -135,7 +137,7 @@ public:
 private:
   insn_bits_t b;
   uint64_t x(int lo, int len) { return (b.data >> lo) & ((word_t(1) << len)-1); }
-  uint64_t xs(int lo, int len) { return word_t(b.data) << (64-lo-len) >> (64-len); }
+  uint64_t xs(int lo, int len) { return int64_t(b.data) << (64-lo-len) >> (64-len); }
   uint64_t imm_sign() { return xs(63, 1); }
 };
 
@@ -171,12 +173,12 @@ private:
 #else
 # define WRITE_REG(reg, value) ({ \
     reg_t wdata = (value); /* value may have side effects */ \
-    STATE.log_reg_write = (commit_log_reg_t){(reg) << 1, wdata}; \
+    STATE.log_reg_write = (commit_log_reg_t){(reg) << 1, wdata.data}; \
     STATE.XPR.write(reg, wdata); \
   })
 # define WRITE_FREG(reg, value) ({ \
     freg_t wdata = (value); /* value may have side effects */ \
-    STATE.log_reg_write = (commit_log_reg_t){((reg) << 1) | 1, wdata}; \
+    STATE.log_reg_write = (commit_log_reg_t){((reg) << 1) | 1, wdata.data}; \
     DO_WRITE_FREG(reg, wdata); \
   })
 #endif

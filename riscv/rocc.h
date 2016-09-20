@@ -15,11 +15,11 @@ struct rocc_insn_t
   unsigned funct : 7;
 };
 
-typedef struct
+union rocc_insn_union_t
 {
   rocc_insn_t r;
-  insn_t i;
-} rocc_insn_union_t;
+  insn_word_t i;
+};
 
 class rocc_t : public extension_t
 {

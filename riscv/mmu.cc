@@ -68,7 +68,10 @@ void mmu_t::load_slow_path(word_t addr, word_t len, uint8_t* bytes)
 {
   word_t paddr = translate(addr, LOAD);
   if (sim->addr_is_mem(paddr)) {
-    memcpy(&bytes, sim->addr_to_mem(paddr), len);
+    //memcpy(&bytes, sim->addr_to_mem(paddr), len);
+    char *ppaddr = sim->addr_to_mem(paddr);
+    for(word_t i=0; i<len; i++)
+      *(bytes++) = *(ppaddr++);
     if (tracer.interested_in_range(paddr, paddr + PGSIZE, LOAD))
       tracer.trace(paddr, len, LOAD);
     else

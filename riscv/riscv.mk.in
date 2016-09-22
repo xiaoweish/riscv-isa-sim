@@ -17,6 +17,7 @@ riscv_hdrs = \
 	trap.h \
 	encoding.h \
 	cachesim.h \
+	tagcachesim.h \
 	memtracer.h \
 	extension.h \
 	rocc.h \
@@ -35,6 +36,7 @@ riscv_srcs = \
 	interactive.cc \
 	trap.cc \
 	cachesim.cc \
+	tagcachesim.cc \
 	mmu.cc \
 	disasm.cc \
 	extension.cc \

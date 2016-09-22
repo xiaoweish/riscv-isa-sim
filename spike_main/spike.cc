@@ -28,6 +28,9 @@ static void help()
   fprintf(stderr, "  --ic=<S>:<W>:<B>      Instantiate a cache model with S sets,\n");
   fprintf(stderr, "  --dc=<S>:<W>:<B>        W ways, and B-byte blocks (with S and\n");
   fprintf(stderr, "  --l2=<S>:<W>:<B>        B both powers of 2).\n");
+  fprintf(stderr, "  --tc=<S>:<W>:<B>:<T>  Enable T-bit tags with a tag cache\n");
+  fprintf(stderr, "  --tm0=<S>:<W>:<B>     Use separate tag map 0\n");
+  fprintf(stderr, "  --tm1=<S>:<W>:<B>     Use separate tag map 1\n");
   fprintf(stderr, "  --extension=<name>    Specify RoCC Extension\n");
   fprintf(stderr, "  --extlib=<name>       Shared library to load\n");
   fprintf(stderr, "  --dump-config-string  Print platform configuration string and exit\n");

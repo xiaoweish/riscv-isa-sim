@@ -26,7 +26,7 @@ class cache_sim_t
   cache_sim_t(const cache_sim_t& rhs);
   virtual ~cache_sim_t();
 
-  void access(uint64_t addr, size_t bytes, bool store);
+  virtual uint64_t access(uint64_t addr, size_t bytes, bool store);
   void print_stats();
   void set_miss_handler(cache_sim_t* mh) { miss_handler = mh; }
 
@@ -59,7 +59,7 @@ class cache_sim_t
 
   std::string name;
 
-  void init();
+  virtual void init();
 };
 
 class fa_cache_sim_t : public cache_sim_t

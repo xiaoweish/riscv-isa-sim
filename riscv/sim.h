@@ -37,7 +37,6 @@ public:
 private:
   std::unique_ptr<htif_isasim_t> htif;
   char* mem; // main memory
-  char* tagmem; // tag partition
   size_t memsz; // memory size in bytes
   mmu_t* debug_mmu;  // debug port into main memory
   std::vector<processor_t*> procs;

@@ -37,6 +37,7 @@ class tag_cache_sim_t : public cache_sim_t
   virtual uint8_t writeback_avoid(size_t row) {
     return 0;
   }
+  size_t memsz() { return sim->memsz; }
   void verify(size_t row);  // verify that the row data match with actual memory data
 
   uint64_t read(uint64_t addr, uint64_t &data, uint8_t fetch);
@@ -62,7 +63,15 @@ class unified_tag_cache_sim_t : public tag_cache_sim_t
 {
  public:
   unified_tag_cache_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, const char* name, sim_t* sim);
+  unified_tag_cache_sim_t(const unified_tag_cache_sim_t& rhs);
   static tag_cache_sim_t* construct(const char* config, const char* name);
+  virtual uint64_t access(uint64_t addr, size_t bytes, bool store);
+
+ private:
+  uint64_t tt_base, tm0_base, tm1_base;
+
+  virtual void init();
+
 };
 
 

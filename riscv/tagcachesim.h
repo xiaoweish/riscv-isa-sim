@@ -38,6 +38,7 @@ class tag_cache_sim_t : public cache_sim_t
     return 0;
   }
   size_t memsz() { return sim->memsz; }
+  uint64_t read_mem(uint64_t addr) { return *(uint64_t *)(sim->addr_to_mem(addr)); }
   void verify(size_t row);  // verify that the row data match with actual memory data
 
   uint64_t read(uint64_t addr, uint64_t &data, uint8_t fetch);

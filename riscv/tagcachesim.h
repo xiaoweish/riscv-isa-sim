@@ -10,7 +10,7 @@
 class tag_cache_sim_t : public cache_sim_t
 {
  public:
-  tag_cache_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, const char* name, sim_t* sim);
+  tag_cache_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, uint8_t wb, const char* name, sim_t* sim);
   tag_cache_sim_t(const tag_cache_sim_t& rhs);
   virtual ~tag_cache_sim_t();
 
@@ -18,6 +18,7 @@ class tag_cache_sim_t : public cache_sim_t
 
  protected:
   size_t tagsz;
+  uint8_t wb_enforce;
   uint64_t tag_base;
 
   uint8_t *datas;
@@ -49,9 +50,9 @@ class tag_cache_sim_t : public cache_sim_t
 class tag_table_sim_t : public tag_cache_sim_t
 {
  public:
-  tag_table_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, const char* name, sim_t* sim);
+  tag_table_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, uint8_t wb, const char* name, sim_t* sim);
   tag_table_sim_t(const tag_table_sim_t &rhs);
-  static tag_cache_sim_t* construct(const char* config, const char* name);
+  static tag_cache_sim_t* construct(const char* config, const char* name, sim_t* sim);
   virtual uint64_t access(uint64_t addr, size_t bytes, bool store);
 
  private:
@@ -62,9 +63,9 @@ class tag_table_sim_t : public tag_cache_sim_t
 class tag_map_sim_t : public tag_cache_sim_t
 {
  public:
-  tag_map_sim_t(size_t sets, size_t ways, size_t linesz, uint64_t tablesz, uint64_t table_linesz, const char* name, sim_t* sim);
+  tag_map_sim_t(size_t sets, size_t ways, size_t linesz, uint64_t tablesz, uint64_t table_linesz, uint8_t wb, const char* name, sim_t* sim);
   tag_map_sim_t(const tag_map_sim_t &rhs);
-  static tag_cache_sim_t* construct(const char* config, const char* name);
+  static tag_cache_sim_t* construct(const char* config, const char* name, sim_t* sim);
   virtual uint64_t access(uint64_t addr, size_t bytes, bool store);
 
  private:
@@ -77,9 +78,9 @@ class tag_map_sim_t : public tag_cache_sim_t
 class unified_tag_cache_sim_t : public tag_cache_sim_t
 {
  public:
-  unified_tag_cache_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, const char* name, sim_t* sim);
+  unified_tag_cache_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, uint8_t wb, const char* name, sim_t* sim);
   unified_tag_cache_sim_t(const unified_tag_cache_sim_t& rhs);
-  static tag_cache_sim_t* construct(const char* config, const char* name);
+  static tag_cache_sim_t* construct(const char* config, const char* name, sim_t* sim);
   virtual uint64_t access(uint64_t addr, size_t bytes, bool store);
 
  private:

@@ -4,19 +4,20 @@
 #include <cassert>
 #include <cstring>
 #include <cassert>
+#include <boost/algorithm/string.hpp>
 
 // ----------------- tag cache base class ----------------------- //
 
 static uint8_t *empty_block = NULL;
 
-tag_cache_sim_t::tag_cache_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, const char* name, sim_t* sim)
-  : cache_sim_t(sets, ways, linesz, name), tagsz(tagsz), sim(sim)
+tag_cache_sim_t::tag_cache_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, uint8_t wb, const char* name, sim_t* sim)
+  : cache_sim_t(sets, ways, linesz, name), tagsz(tagsz), wb_enforce(wb), sim(sim)
 {
   init();
 }
 
 tag_cache_sim_t::tag_cache_sim_t(const tag_cache_sim_t& rhs)
-  : cache_sim_t(rhs), tagsz(rhs.tagsz), sim(rhs.sim)
+  : cache_sim_t(rhs), tagsz(rhs.tagsz), wb_enforce(rhs.wb_enforce), sim(rhs.sim)
 {
   init();
   memcpy(datas, rhs.datas, sets*ways*linesz*sizeof(uint8_t));
@@ -146,8 +147,8 @@ uint64_t tag_cache_sim_t::create(uint64_t addr, uint64_t data, uint64_t mask) {
 
 // ----------------- separate tag table class ------------------- //
 
-tag_table_sim_t::tag_table_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, const char* name, sim_t* sim)
-  : tag_cache_sim_t(sets, ways, linesz, tagsz, name, sim)
+tag_table_sim_t::tag_table_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, uint8_t wb, const char* name, sim_t* sim)
+  : tag_cache_sim_t(sets, ways, linesz, tagsz, wb, name, sim)
 {
   init();
 }
@@ -156,6 +157,22 @@ tag_table_sim_t::tag_table_sim_t(const tag_table_sim_t &rhs)
   : tag_cache_sim_t(rhs)
 {
   init();
+}
+
+tag_cache_sim_t* tag_table_sim_t::construct(const char* config, const char* name, sim_t* sim) {
+  // sets:ways:blocksize:tagsz:wb
+  std::vector<std::string> args;
+  std::string config_string = std::string(config);
+  boost::split(args, config_string, boost::is_any_of(":"));
+  assert(args.size() == 5);
+
+  size_t sets = atoi(args[0].c_str());
+  size_t ways = atoi(args[1].c_str());
+  size_t linesz = atoi(args[2].c_str());
+  size_t tagsz = atoi(args[3].c_str());
+  size_t wb = atoi(args[4].c_str());
+
+  return new tag_table_sim_t(sets, ways, linesz, tagsz, wb, name, sim);
 }
 
 uint64_t tag_table_sim_t::access(uint64_t addr, size_t byte, bool store) {
@@ -190,8 +207,8 @@ void tag_table_sim_t::init() {
 }
 
 // ----------------- separate tag map class --------------------- //
-tag_map_sim_t::tag_map_sim_t(size_t sets, size_t ways, size_t linesz, uint64_t tablesz, uint64_t table_linesz, const char* name, sim_t* sim)
-  : tag_cache_sim_t(sets, ways, linesz, 0, name, sim), tt_size(tablesz), tt_linesz(table_linesz)
+tag_map_sim_t::tag_map_sim_t(size_t sets, size_t ways, size_t linesz, uint64_t tablesz, uint64_t table_linesz, uint8_t wb, const char* name, sim_t* sim)
+  : tag_cache_sim_t(sets, ways, linesz, 0, wb, name, sim), tt_size(tablesz), tt_linesz(table_linesz)
 {
   init();
 }
@@ -200,6 +217,23 @@ tag_map_sim_t::tag_map_sim_t(const tag_map_sim_t &rhs)
   : tag_cache_sim_t(rhs), tt_size(rhs.tt_size), tt_linesz(rhs.tt_linesz)
 {
   init();
+}
+
+tag_cache_sim_t* tag_map_sim_t::construct(const char* config, const char* name, sim_t* sim) {
+  // sets:ways:blocksize:tablesz:table_linesz:wb
+  std::vector<std::string> args;
+  std::string config_string = std::string(config);
+  boost::split(args, config_string, boost::is_any_of(":"));
+  assert(args.size() == 6);
+
+  size_t sets = atoi(args[0].c_str());
+  size_t ways = atoi(args[1].c_str());
+  size_t linesz = atoi(args[2].c_str());
+  size_t tablesz = atoi(args[3].c_str());
+  size_t table_linesz = atoi(args[4].c_str());
+  size_t wb = atoi(args[5].c_str());
+
+  return new tag_map_sim_t(sets, ways, linesz, tablesz, table_linesz, wb, name, sim);
 }
 
 uint64_t tag_map_sim_t::access(uint64_t addr, size_t byte, bool store) {
@@ -235,8 +269,8 @@ void tag_map_sim_t::init() {
 }
 
 // ----------------- unified tag cache class -------------------- //
-unified_tag_cache_sim_t::unified_tag_cache_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, const char* name, sim_t* sim)
-  : tag_cache_sim_t(sets, ways, linesz, tagsz, name, sim)
+unified_tag_cache_sim_t::unified_tag_cache_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, uint8_t wb, const char* name, sim_t* sim)
+  : tag_cache_sim_t(sets, ways, linesz, tagsz, wb, name, sim)
 {
   init();
 }
@@ -251,6 +285,22 @@ void unified_tag_cache_sim_t::init() {
   tt_base =  DRAM_BASE + memsz() - memsz() / (64 / tagsz);
   tm0_base = DRAM_BASE + memsz() - memsz() / (64 / tagsz) / (linesz * 8);
   tm1_base = DRAM_BASE + memsz() - memsz() / (64 / tagsz) / (linesz * 8) / (linesz * 8);
+}
+
+tag_cache_sim_t* unified_tag_cache_sim_t::construct(const char* config, const char* name, sim_t* sim) {
+  // sets:ways:blocksize:tagsz:wb
+  std::vector<std::string> args;
+  std::string config_string = std::string(config);
+  boost::split(args, config_string, boost::is_any_of(":"));
+  assert(args.size() == 5);
+
+  size_t sets = atoi(args[0].c_str());
+  size_t ways = atoi(args[1].c_str());
+  size_t linesz = atoi(args[2].c_str());
+  size_t tagsz = atoi(args[3].c_str());
+  size_t wb = atoi(args[4].c_str());
+
+  return new unified_tag_cache_sim_t(sets, ways, linesz, tagsz, wb, name, sim);
 }
 
 uint64_t unified_tag_cache_sim_t::access(uint64_t addr, size_t bytes, bool store) {

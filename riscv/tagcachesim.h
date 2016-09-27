@@ -6,6 +6,7 @@
 #include "memtracer.h"
 #include "cachesim.h"
 #include "sim.h"
+#include <string>
 
 class tag_cache_sim_t : public cache_sim_t
 {
@@ -13,7 +14,7 @@ class tag_cache_sim_t : public cache_sim_t
   tag_cache_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, uint8_t wb, const char* name, sim_t* sim);
   tag_cache_sim_t(const tag_cache_sim_t& rhs);
   virtual ~tag_cache_sim_t();
-
+  virtual const std::string extra_config_string() = 0;
   virtual uint64_t access(uint64_t addr, size_t bytes, bool store) = 0;
 
  protected:
@@ -53,6 +54,7 @@ class tag_table_sim_t : public tag_cache_sim_t
   tag_table_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, uint8_t wb, const char* name, sim_t* sim);
   tag_table_sim_t(const tag_table_sim_t &rhs);
   static tag_cache_sim_t* construct(const char* config, const char* name, sim_t* sim);
+  virtual const std::string extra_config_string();
   virtual uint64_t access(uint64_t addr, size_t bytes, bool store);
 
  private:
@@ -66,6 +68,7 @@ class tag_map_sim_t : public tag_cache_sim_t
   tag_map_sim_t(size_t sets, size_t ways, size_t linesz, uint64_t tablesz, uint64_t table_linesz, uint8_t wb, const char* name, sim_t* sim);
   tag_map_sim_t(const tag_map_sim_t &rhs);
   static tag_cache_sim_t* construct(const char* config, const char* name, sim_t* sim);
+  virtual const std::string extra_config_string();
   virtual uint64_t access(uint64_t addr, size_t bytes, bool store);
 
  private:
@@ -81,6 +84,7 @@ class unified_tag_cache_sim_t : public tag_cache_sim_t
   unified_tag_cache_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, uint8_t wb, const char* name, sim_t* sim);
   unified_tag_cache_sim_t(const unified_tag_cache_sim_t& rhs);
   static tag_cache_sim_t* construct(const char* config, const char* name, sim_t* sim);
+  virtual const std::string extra_config_string();
   virtual uint64_t access(uint64_t addr, size_t bytes, bool store);
 
  private:

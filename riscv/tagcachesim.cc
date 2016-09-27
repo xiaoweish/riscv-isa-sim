@@ -5,6 +5,7 @@
 #include <cstring>
 #include <cassert>
 #include <boost/algorithm/string.hpp>
+#include <boost/format.hpp>
 
 // ----------------- tag cache base class ----------------------- //
 
@@ -175,11 +176,15 @@ tag_cache_sim_t* tag_table_sim_t::construct(const char* config, const char* name
   return new tag_table_sim_t(sets, ways, linesz, tagsz, wb, name, sim);
 }
 
+const std::string tag_table_sim_t::extra_config_string() {
+  return (boost::format(":%1%:%2%") % (memsz() / (64 / tagsz)) % linesz).str();
+}
+
 uint64_t tag_table_sim_t::access(uint64_t addr, size_t byte, bool store) {
   uint64_t tt_tag, tt_data = 0, tt_addr = tt_base + (addr-DRAM_BASE) / (64 / tagsz);
   uint64_t tt_wmask = (((uint64_t)1 << (tagsz*byte/8)) - 1) << (addr % (64 / tagsz)) * (64 / tagsz);
   uint64_t tt_wdata = read_mem(tt_addr);
-  uint64_t tm_data = 0;
+  uint64_t tm_data = 1;
 
   // read map if any
   if(tag_map != NULL) tm_data = tag_map->access(tt_addr, 1, 0);
@@ -220,7 +225,7 @@ tag_map_sim_t::tag_map_sim_t(const tag_map_sim_t &rhs)
 }
 
 tag_cache_sim_t* tag_map_sim_t::construct(const char* config, const char* name, sim_t* sim) {
-  // sets:ways:blocksize:tablesz:table_linesz:wb
+  // sets:ways:blocksize:wb:tablesz:table_linesz
   std::vector<std::string> args;
   std::string config_string = std::string(config);
   boost::split(args, config_string, boost::is_any_of(":"));
@@ -229,18 +234,22 @@ tag_cache_sim_t* tag_map_sim_t::construct(const char* config, const char* name, 
   size_t sets = atoi(args[0].c_str());
   size_t ways = atoi(args[1].c_str());
   size_t linesz = atoi(args[2].c_str());
-  size_t tablesz = atoi(args[3].c_str());
-  size_t table_linesz = atoi(args[4].c_str());
-  size_t wb = atoi(args[5].c_str());
+  size_t wb = atoi(args[3].c_str());
+  size_t tablesz = atoi(args[4].c_str());
+  size_t table_linesz = atoi(args[5].c_str());
 
   return new tag_map_sim_t(sets, ways, linesz, tablesz, table_linesz, wb, name, sim);
+}
+
+const std::string tag_map_sim_t::extra_config_string() {
+  return (boost::format(":%1%:%2%") % (tt_size / (tt_linesz * 8)) % linesz).str();
 }
 
 uint64_t tag_map_sim_t::access(uint64_t addr, size_t byte, bool store) {
   uint64_t tm_tag, tm_data = 0, tm_addr = tm_base + (addr-DRAM_BASE) / (tt_linesz * 8);
   uint64_t tm_wmask = (uint64_t)1 << (addr % (tt_linesz * 8)) * (tt_linesz * 8);
   uint64_t tm_wdata = read_mem(tm_addr);
-  uint64_t th_data = 0;
+  uint64_t th_data = 1;
 
   // read map if any
   if(tag_map != NULL) th_data = tag_map->access(tm_addr, 1, 0);
@@ -301,6 +310,10 @@ tag_cache_sim_t* unified_tag_cache_sim_t::construct(const char* config, const ch
   size_t wb = atoi(args[4].c_str());
 
   return new unified_tag_cache_sim_t(sets, ways, linesz, tagsz, wb, name, sim);
+}
+
+const std::string unified_tag_cache_sim_t::extra_config_string() {
+  return "";
 }
 
 uint64_t unified_tag_cache_sim_t::access(uint64_t addr, size_t bytes, bool store) {

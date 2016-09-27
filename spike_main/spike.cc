@@ -4,6 +4,7 @@
 #include "mmu.h"
 #include "htif.h"
 #include "cachesim.h"
+#include "tagcachesim.h"
 #include "extension.h"
 #include <dlfcn.h>
 #include <fesvr/option_parser.h>
@@ -28,9 +29,10 @@ static void help()
   fprintf(stderr, "  --ic=<S>:<W>:<B>      Instantiate a cache model with S sets,\n");
   fprintf(stderr, "  --dc=<S>:<W>:<B>        W ways, and B-byte blocks (with S and\n");
   fprintf(stderr, "  --l2=<S>:<W>:<B>        B both powers of 2).\n");
-  fprintf(stderr, "  --tc=<S>:<W>:<B>:<T>  Enable T-bit tags with a tag cache\n");
-  fprintf(stderr, "  --tm0=<S>:<W>:<B>     Use separate tag map 0\n");
-  fprintf(stderr, "  --tm1=<S>:<W>:<B>     Use separate tag map 1\n");
+  fprintf(stderr, "  --utc=<S>:<W>:<B>:<T>:<WB> Enable T-bit tags with a unified tag cache\n");
+  fprintf(stderr, "  --tt=<S>:<W>:<B>:<T>:<WB>  Enable T-bit tags with a separate tag cache\n");
+  fprintf(stderr, "  --tm0=<S>:<W>:<B>:<WB> Use separate tag map 0\n");
+  fprintf(stderr, "  --tm1=<S>:<W>:<B>:<WB> Use separate tag map 1\n");
   fprintf(stderr, "  --extension=<name>    Specify RoCC Extension\n");
   fprintf(stderr, "  --extlib=<name>       Shared library to load\n");
   fprintf(stderr, "  --dump-config-string  Print platform configuration string and exit\n");
@@ -48,6 +50,8 @@ int main(int argc, char** argv)
   std::unique_ptr<icache_sim_t> ic;
   std::unique_ptr<dcache_sim_t> dc;
   std::unique_ptr<cache_sim_t> l2;
+  std::unique_ptr<tag_cache_sim_t> utc, tt, tm0, tm1;
+  std::string utc_cfg, tt_cfg, tm0_cfg, tm1_cfg;
   std::function<extension_t*()> extension;
   const char* isa = DEFAULT_ISA;
 
@@ -62,6 +66,10 @@ int main(int argc, char** argv)
   parser.option(0, "ic", 1, [&](const char* s){ic.reset(new icache_sim_t(s));});
   parser.option(0, "dc", 1, [&](const char* s){dc.reset(new dcache_sim_t(s));});
   parser.option(0, "l2", 1, [&](const char* s){l2.reset(cache_sim_t::construct(s, "L2$"));});
+  parser.option(0, "tt", 1, [&](const char* s){tt_cfg = std::string(s);});
+  parser.option(0, "tm0", 1, [&](const char* s){tm0_cfg = std::string(s);});
+  parser.option(0, "tm1", 1, [&](const char* s){tm1_cfg = std::string(s);});
+  parser.option(0, "utc", 1, [&](const char* s){utc_cfg = std::string(s);});
   parser.option(0, "isa", 1, [&](const char* s){isa = s;});
   parser.option(0, "extension", 1, [&](const char* s){extension = find_extension(s);});
   parser.option(0, "dump-config-string", 0, [&](const char *s){dump_config_string = true;});
@@ -76,6 +84,19 @@ int main(int argc, char** argv)
   auto argv1 = parser.parse(argv);
   std::vector<std::string> htif_args(argv1, (const char*const*)argv + argc);
   sim_t s(isa, nprocs, mem_mb, htif_args);
+
+  if(tt_cfg.size())
+    tt.reset(tag_table_sim_t::construct(tt_cfg.c_str(), "TT$", &s));
+  if(tt_cfg.size() && tm0_cfg.size()) {
+    tm0_cfg += tt->extra_config_string();
+    tm0.reset(tag_map_sim_t::construct(tm0_cfg.c_str(), "TM0$", &s));
+  }
+  if(tt_cfg.size() && tm0_cfg.size() && tm1_cfg.size()) {
+    tm1_cfg += tm0->extra_config_string();
+    tm1.reset(tag_map_sim_t::construct(tm1_cfg.c_str(), "TM1$", &s));
+  }
+  if(!tt_cfg.size() && utc_cfg.size())
+    utc.reset(unified_tag_cache_sim_t::construct(utc_cfg.c_str(), "UTC$", &s));
 
   if (dump_config_string) {
     printf("%s", s.get_config_string());

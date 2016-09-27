@@ -29,6 +29,7 @@ tag_cache_sim_t::~tag_cache_sim_t() {
 void tag_cache_sim_t::init() {
   datas = new uint8_t[sets*ways*linesz]();
   tag_map = NULL;
+  tag_base = DRAM_BASE + sim->memsz - sim->memsz * tagsz / 64;
   if(empty_block == NULL) empty_block = new uint8_t[linesz]();
 }
 
@@ -52,7 +53,7 @@ uint64_t* tag_cache_sim_t::victimize(uint64_t addr, size_t &row) {
 }
 
 void tag_cache_sim_t::refill(uint64_t addr, size_t row) {
-  memcpy(datas + row*linesz, sim->addr_to_mem(addr), linesz);
+  memcpy(datas + row*linesz, sim->addr_to_tagmem(addr, tag_base), linesz);
   if(!memcmp(datas + row*linesz, empty_block, linesz)) {
     tags[row] = (addr >> idx_shift) | VALID;
   } else {
@@ -61,16 +62,17 @@ void tag_cache_sim_t::refill(uint64_t addr, size_t row) {
 }
 
 void tag_cache_sim_t::writeback(size_t row) {
-  tags[row] = 0;
   if((tags[row] & (VALID|DIRTY)) != (VALID|DIRTY)) return;
-  if(writeback_avoid(row)) return;
-  //uint64_t addr = tags[row] << idx_shift;
-  //memcpy(sim->addr_to_mem(addr), datas + row*linesz, linesz);
+  if((tags[row] & TAGFLAG) || 1) {
+    uint64_t addr = tags[row] << idx_shift;
+    memcpy(sim->addr_to_tagmem(addr, tag_base), datas + row*linesz, linesz);
+  }
+  tags[row] = 0;
 }
 
 void tag_cache_sim_t::verify(size_t row) {
   uint64_t addr = tags[row] << idx_shift;
-  assert(!memcmp(sim->addr_to_mem(addr), datas+row*linesz, linesz));
+  assert(!memcmp(sim->addr_to_mem(addr), sim->addr_to_tagmem(addr, tag_base), linesz));
 }
 
 uint64_t tag_cache_sim_t::read(uint64_t addr, uint64_t &data, uint8_t fetch) {
@@ -147,12 +149,89 @@ uint64_t tag_cache_sim_t::create(uint64_t addr, uint64_t data, uint64_t mask) {
 tag_table_sim_t::tag_table_sim_t(size_t sets, size_t ways, size_t linesz, size_t tagsz, const char* name, sim_t* sim)
   : tag_cache_sim_t(sets, ways, linesz, tagsz, name, sim)
 {
+  init();
+}
+
+tag_table_sim_t::tag_table_sim_t(const tag_table_sim_t &rhs)
+  : tag_cache_sim_t(rhs)
+{
+  init();
+}
+
+uint64_t tag_table_sim_t::access(uint64_t addr, size_t byte, bool store) {
+  uint64_t tt_tag, tt_data = 0, tt_addr = tt_base + (addr-DRAM_BASE) / (64 / tagsz);
+  uint64_t tt_wmask = (((uint64_t)1 << (tagsz*byte/8)) - 1) << (addr % (64 / tagsz)) * (64 / tagsz);
+  uint64_t tt_wdata = read_mem(tt_addr);
+  uint64_t tm_data = 0;
+
+  // read map if any
+  if(tag_map != NULL) tm_data = tag_map->access(tt_addr, 1, 0);
+
+  // read tag table
+  if(tm_data) {                // have tags
+    tt_tag = read(tt_addr, tt_data, 1);
+    if(store && (tt_wdata & tt_wmask) != (tt_data & tt_wmask)) {
+      tt_tag = write(tt_addr, tt_wdata, tt_wmask);
+      if((tt_tag & DIRTY) && tag_map != NULL)
+        tag_map->access(tt_addr, 1, 1);
+    }
+  } else {                      // empty
+    if(store && (tt_wdata & tt_wmask) != 0) {
+      tt_tag = create(tt_addr, tt_wdata, tt_wmask);
+      if(tag_map != NULL)
+        tag_map->access(tt_addr, 1, 1);
+    }
+  }
+  return 0;
+}
+
+void tag_table_sim_t::init() {
+  tt_base = DRAM_BASE + memsz() - memsz() / (64 / tagsz);
 }
 
 // ----------------- separate tag map class --------------------- //
-tag_map_sim_t::tag_map_sim_t(size_t sets, size_t ways, size_t linesz, const char* name, sim_t* sim)
-  : tag_cache_sim_t(sets, ways, linesz, 0, name, sim)
+tag_map_sim_t::tag_map_sim_t(size_t sets, size_t ways, size_t linesz, uint64_t tablesz, uint64_t table_linesz, const char* name, sim_t* sim)
+  : tag_cache_sim_t(sets, ways, linesz, 0, name, sim), tt_size(tablesz), tt_linesz(table_linesz)
 {
+  init();
+}
+
+tag_map_sim_t::tag_map_sim_t(const tag_map_sim_t &rhs)
+  : tag_cache_sim_t(rhs), tt_size(rhs.tt_size), tt_linesz(rhs.tt_linesz)
+{
+  init();
+}
+
+uint64_t tag_map_sim_t::access(uint64_t addr, size_t byte, bool store) {
+  uint64_t tm_tag, tm_data = 0, tm_addr = tm_base + (addr-DRAM_BASE) / (tt_linesz * 8);
+  uint64_t tm_wmask = (uint64_t)1 << (addr % (tt_linesz * 8)) * (tt_linesz * 8);
+  uint64_t tm_wdata = read_mem(tm_addr);
+  uint64_t th_data = 0;
+
+  // read map if any
+  if(tag_map != NULL) th_data = tag_map->access(tm_addr, 1, 0);
+
+  // read tag table
+  if(th_data) {                // have tags
+    tm_tag = read(tm_addr, tm_data, 1);
+    if(store && (tm_wdata & tm_wmask) != (tm_data & tm_wmask)) {
+      tm_tag = write(tm_addr, tm_wdata, tm_wmask);
+      if((tm_tag & DIRTY) && tag_map != NULL)
+        tag_map->access(tm_addr, 1, 1);
+    }
+  } else {                      // empty
+    if(store && (tm_wdata & tm_wmask) != 0) {
+      tm_tag = create(tm_addr, tm_wdata, tm_wmask);
+      if(tag_map != NULL)
+        tag_map->access(tm_addr, 1, 1);
+    }
+  }
+  return tm_data & tm_wmask;
+}
+
+
+void tag_map_sim_t::init() {
+  tm_base = DRAM_BASE + memsz() - tt_size / (tt_linesz * 8);
 }
 
 // ----------------- unified tag cache class -------------------- //
@@ -169,15 +248,15 @@ unified_tag_cache_sim_t::unified_tag_cache_sim_t( const unified_tag_cache_sim_t&
 }
 
 void unified_tag_cache_sim_t::init() {
-  tt_base = memsz() - memsz() / (64 / tagsz);
-  tm0_base = memsz() - memsz() / (64 / tagsz) / (linesz * 8);
-  tm1_base = memsz() - memsz() / (64 / tagsz) / (linesz * 8) / (linesz * 8);
+  tt_base =  DRAM_BASE + memsz() - memsz() / (64 / tagsz);
+  tm0_base = DRAM_BASE + memsz() - memsz() / (64 / tagsz) / (linesz * 8);
+  tm1_base = DRAM_BASE + memsz() - memsz() / (64 / tagsz) / (linesz * 8) / (linesz * 8);
 }
 
 uint64_t unified_tag_cache_sim_t::access(uint64_t addr, size_t bytes, bool store) {
-  uint64_t tt_tag, tt_data, tt_addr = tt_base + addr / (64 / tagsz);
-  uint64_t tm0_tag, tm0_data, tm0_addr = tm0_base + tt_addr / (linesz * 8);
-  uint64_t tm1_tag, tm1_data, tm1_addr = tm1_base + tm0_addr / (linesz * 8);
+  uint64_t tt_tag = 0, tt_data = 0, tt_addr = tt_base + (addr-DRAM_BASE) / (64 / tagsz);
+  uint64_t tm0_tag = 0, tm0_data = 0, tm0_addr = tm0_base + (tt_addr-DRAM_BASE) / (linesz * 8);
+  uint64_t tm1_tag = 0, tm1_data = 0, tm1_addr = tm1_base + (tm0_addr-DRAM_BASE) / (linesz * 8);
   uint64_t tt_wmask = (((uint64_t)1 << (tagsz*bytes/8)) - 1) << (addr % (64 / tagsz)) * (64 / tagsz);
   uint64_t tt_wdata = read_mem(tt_addr);
   uint64_t tm0_wmask = (uint64_t)1 << (tt_addr % (linesz * 8)) * (linesz * 8);

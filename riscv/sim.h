@@ -37,6 +37,7 @@ public:
 private:
   std::unique_ptr<htif_isasim_t> htif;
   char* mem; // main memory
+  char *tagmem; // mirror tag partition, used for verification
   size_t memsz; // memory size in bytes
   mmu_t* debug_mmu;  // debug port into main memory
   std::vector<processor_t*> procs;
@@ -60,6 +61,7 @@ private:
     return addr >= DRAM_BASE && addr < DRAM_BASE + memsz;
   }
   char* addr_to_mem(word_t addr) { return mem + addr - DRAM_BASE; }
+  char* addr_to_tagmem(word_t addr, size_t tag_base) { return tagmem + addr - tag_base; }
   word_t mem_to_addr(char* x) { return x - mem + DRAM_BASE; }
   bool mmio_load(word_t addr, size_t len, uint8_t* bytes);
   bool mmio_store(word_t addr, size_t len, const uint8_t* bytes);

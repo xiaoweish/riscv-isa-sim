@@ -7,6 +7,8 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/format.hpp>
 
+#define TC_STAT_BEHAV
+
 // ----------------- tag cache base class ----------------------- //
 
 static uint8_t *empty_block = NULL;
@@ -65,9 +67,10 @@ void tag_cache_sim_t::refill(uint64_t addr, size_t row) {
 
 void tag_cache_sim_t::writeback(size_t row) {
   if((tags[row] & (VALID|DIRTY)) != (VALID|DIRTY)) return;
-  if((tags[row] & TAGFLAG) || 1) {
+  if(wb_enforce || (tags[row] & TAGFLAG) || tag_map == NULL) {
     uint64_t addr = tags[row] << idx_shift;
     memcpy(sim->addr_to_tagmem(addr, tag_base), datas + row*linesz, linesz);
+    writebacks++;
   }
   tags[row] = 0;
 }
@@ -85,6 +88,7 @@ uint64_t tag_cache_sim_t::read(uint64_t addr, uint64_t &data, uint8_t fetch) {
     tag = victimize(addr, row);
     writeback(row);
     refill(addr, row);
+    read_misses++;
   }
   if((*tag) & TAGFLAG) {        // read data
     data = *(uint64_t *)(datas + data_row_addr(addr, row));
@@ -97,10 +101,15 @@ uint64_t tag_cache_sim_t::read(uint64_t addr, uint64_t &data, uint8_t fetch) {
 uint64_t tag_cache_sim_t::write(uint64_t addr, uint64_t data, uint64_t mask) {
   uint64_t rdata, wdata;
   size_t row;
-  uint64_t *tag;
+  uint64_t *tag = check_tag(addr, row);
   uint8_t tagFlag_chg = 0;
-  read(addr, rdata, 1);         // force fetch+read
-  tag = check_tag(addr, row);   // get tag and row
+  if(tag == NULL) {
+    tag = victimize(addr, row);
+    writeback(row);
+    refill(addr, row);
+    write_misses++;
+  }
+  rdata = *(uint64_t *)(datas + data_row_addr(addr, row));
   wdata = (rdata & ~mask) | (data & mask); // get the udpate data
   if(rdata != wdata) {                     // update
     *(uint64_t *)(datas + data_row_addr(addr, row)) = wdata;
@@ -186,11 +195,18 @@ uint64_t tag_table_sim_t::access(uint64_t addr, size_t byte, bool store) {
   uint64_t tt_wdata = read_mem(tt_addr);
   uint64_t tm_data = 1;
 
+#ifdef TC_STAT_BEHAV
+    store ? write_accesses++ : read_accesses++;
+#endif
+
   // read map if any
   if(tag_map != NULL) tm_data = tag_map->access(tt_addr, 1, 0);
 
   // read tag table
   if(tm_data) {                // have tags
+#ifndef TC_STAT_BEHAV
+    store && (tt_wdata & tt_wmask) != (tt_data & tt_wmask) ? write_accesses++ : read_accesses++;
+#endif
     tt_tag = read(tt_addr, tt_data, 1);
     if(store && (tt_wdata & tt_wmask) != (tt_data & tt_wmask)) {
       tt_tag = write(tt_addr, tt_wdata, tt_wmask);
@@ -198,8 +214,14 @@ uint64_t tag_table_sim_t::access(uint64_t addr, size_t byte, bool store) {
         tag_map->access(tt_addr, 1, 1);
     }
   } else {                      // empty
+#ifndef TC_STAT_BEHAV
+    store && (tt_wdata & tt_wmask) != 0 ? write_accesses++ : read_accesses++;
+#endif
     if(store && (tt_wdata & tt_wmask) != 0) {
-      tt_tag = create(tt_addr, tt_wdata, tt_wmask);
+      if(wb_enforce || tag_map == NULL)
+        tt_tag = write(tt_addr, tt_wdata, tt_wmask);
+      else
+        tt_tag = create(tt_addr, tt_wdata, tt_wmask);
       if(tag_map != NULL)
         tag_map->access(tt_addr, 1, 1);
     }
@@ -251,20 +273,28 @@ uint64_t tag_map_sim_t::access(uint64_t addr, size_t byte, bool store) {
   uint64_t tm_wdata = read_mem(tm_addr);
   uint64_t th_data = 1;
 
+  store ? read_accesses-- : read_accesses++;
+  write_accesses += store ? 1 : 0;
+
   // read map if any
   if(tag_map != NULL) th_data = tag_map->access(tm_addr, 1, 0);
 
   // read tag table
   if(th_data) {                // have tags
     tm_tag = read(tm_addr, tm_data, 1);
+    assert((tm_wdata & tm_wmask) != (tm_data & tm_wmask));
     if(store && (tm_wdata & tm_wmask) != (tm_data & tm_wmask)) {
       tm_tag = write(tm_addr, tm_wdata, tm_wmask);
       if((tm_tag & DIRTY) && tag_map != NULL)
         tag_map->access(tm_addr, 1, 1);
     }
   } else {                      // empty
+    assert((tm_wdata & tm_wmask) != 0);
     if(store && (tm_wdata & tm_wmask) != 0) {
-      tm_tag = create(tm_addr, tm_wdata, tm_wmask);
+      if(wb_enforce || tag_map == NULL)
+        tm_tag = write(tm_addr, tm_wdata, tm_wmask);
+      else
+        tm_tag = create(tm_addr, tm_wdata, tm_wmask);
       if(tag_map != NULL)
         tag_map->access(tm_addr, 1, 1);
     }
@@ -331,6 +361,12 @@ uint64_t unified_tag_cache_sim_t::access(uint64_t addr, size_t bytes, bool store
   state_t state = s_tt_r;
   uint64_t rv = 0;
 
+#ifdef TC_STAT_BEHAV
+  store ? write_accesses++ : read_accesses++;
+#else
+  read_accesses++;
+#endif
+
   do {
     switch(state) {
     case s_tt_r:                // read tag table
@@ -379,6 +415,10 @@ uint64_t unified_tag_cache_sim_t::access(uint64_t addr, size_t bytes, bool store
     case s_tt_w:
       tt_tag = write(tt_addr, tt_wdata, tt_wmask);
       state = (tt_tag & DIRTY) ? s_tm0_w : s_idle;
+#ifndef TC_STAT_BEHAV
+      write_accesses++;
+      read_accesses--;
+#endif
       break;
     case s_tm0_w:
       tm0_tag = write(tm0_addr, (tt_tag & TAGFLAG) ? tm0_wmask : 0, tm0_wmask);

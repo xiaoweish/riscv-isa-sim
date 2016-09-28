@@ -16,7 +16,7 @@ class mmu_t;
 class sim_t
 {
 public:
-  sim_t(const char* isa, size_t _nprocs, size_t mem_mb,
+  sim_t(const char* isa, size_t _nprocs, size_t mem_mb, size_t tagsz,
         const std::vector<std::string>& htif_args);
   ~sim_t();
 
@@ -39,6 +39,7 @@ private:
   char* mem; // main memory
   char *tagmem; // mirror tag partition, used for verification
   size_t memsz; // memory size in bytes
+  size_t tagsz; // number of tag bits per 64-bit word
   mmu_t* debug_mmu;  // debug port into main memory
   std::vector<processor_t*> procs;
   std::string config_string;
@@ -63,6 +64,7 @@ private:
   char* addr_to_mem(word_t addr) { return mem + addr - DRAM_BASE; }
   char* addr_to_tagmem(word_t addr, size_t tag_base) { return tagmem + addr - tag_base; }
   word_t mem_to_addr(char* x) { return x - mem + DRAM_BASE; }
+  bool cacheable(word_t addr) { return addr >= DRAM_BASE && addr < DRAM_BASE + memsz; }
   bool mmio_load(word_t addr, size_t len, uint8_t* bytes);
   bool mmio_store(word_t addr, size_t len, const uint8_t* bytes);
   void make_config_string();

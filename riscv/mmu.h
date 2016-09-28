@@ -115,7 +115,7 @@ public:
     entry->data = fetch;
 
     word_t paddr = sim->mem_to_addr((char*)iaddr);
-    if (tracer.interested_in_range(paddr, paddr + 1, FETCH)) {
+    if (sim->cacheable(paddr) && tracer.interested_in_range(paddr, paddr + 1, FETCH)) {
       entry->tag = -1;
       tracer.trace(paddr, length, FETCH);
     }

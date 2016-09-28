@@ -20,9 +20,10 @@ static void handle_signal(int sig)
   signal(sig, &handle_signal);
 }
 
-sim_t::sim_t(const char* isa, size_t nprocs, size_t mem_mb,
+sim_t::sim_t(const char* isa, size_t nprocs, size_t mem_mb, size_t tagsz,
              const std::vector<std::string>& args)
-  : htif(new htif_isasim_t(this, args)), procs(std::max(nprocs, size_t(1))),
+  : htif(new htif_isasim_t(this, args)), tagsz(tagsz),
+    procs(std::max(nprocs, size_t(1))),
     current_step(0), current_proc(0), debug(false)
 {
   signal(SIGINT, &handle_signal);
@@ -40,6 +41,14 @@ sim_t::sim_t(const char* isa, size_t nprocs, size_t mem_mb,
   if (memsz != memsz0)
     fprintf(stderr, "warning: only got %lu bytes of target mem (wanted %lu)\n",
             (unsigned long)memsz, (unsigned long)memsz0);
+
+  size_t tagmemsz = memsz / 64 * tagsz;
+  tagmem = (char*)calloc(1, tagmemsz);
+  assert(tagmem != NULL);
+
+  // initial tag parition
+  memset(mem + memsz - tagmemsz, 0, tagmemsz);
+  memset(tagmem, 0, tagmemsz);
 
   debug_mmu = new mmu_t(this, NULL);
 

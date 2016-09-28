@@ -19,23 +19,24 @@ static void help()
 {
   fprintf(stderr, "usage: spike [host options] <target program> [target options]\n");
   fprintf(stderr, "Host Options:\n");
-  fprintf(stderr, "  -p<n>                 Simulate <n> processors [default 1]\n");
-  fprintf(stderr, "  -m<n>                 Provide <n> MiB of target memory [default 4096]\n");
-  fprintf(stderr, "  -d                    Interactive debug mode\n");
-  fprintf(stderr, "  -g                    Track histogram of PCs\n");
-  fprintf(stderr, "  -l                    Generate a log of execution\n");
-  fprintf(stderr, "  -h                    Print this help message\n");
-  fprintf(stderr, "  --isa=<name>          RISC-V ISA string [default %s]\n", DEFAULT_ISA);
-  fprintf(stderr, "  --ic=<S>:<W>:<B>      Instantiate a cache model with S sets,\n");
-  fprintf(stderr, "  --dc=<S>:<W>:<B>        W ways, and B-byte blocks (with S and\n");
-  fprintf(stderr, "  --l2=<S>:<W>:<B>        B both powers of 2).\n");
-  fprintf(stderr, "  --utc=<S>:<W>:<B>:<T>:<WB> Enable T-bit tags with a unified tag cache\n");
-  fprintf(stderr, "  --tt=<S>:<W>:<B>:<T>:<WB>  Enable T-bit tags with a separate tag cache\n");
+  fprintf(stderr, "  -p<n>                  Simulate <n> processors [default 1]\n");
+  fprintf(stderr, "  -m<n>                  Provide <n> MiB of target memory [default 4096]\n");
+  fprintf(stderr, "  -t<n>                  number of tag bits\n");
+  fprintf(stderr, "  -d                     Interactive debug mode\n");
+  fprintf(stderr, "  -g                     Track histogram of PCs\n");
+  fprintf(stderr, "  -l                     Generate a log of execution\n");
+  fprintf(stderr, "  -h                     Print this help message\n");
+  fprintf(stderr, "  --isa=<name>           RISC-V ISA string [default %s]\n", DEFAULT_ISA);
+  fprintf(stderr, "  --ic=<S>:<W>:<B>       Instantiate a cache model with S sets,\n");
+  fprintf(stderr, "  --dc=<S>:<W>:<B>         W ways, and B-byte blocks (with S and\n");
+  fprintf(stderr, "  --l2=<S>:<W>:<B>         B both powers of 2).\n");
+  fprintf(stderr, "  --utc=<S>:<W>:<B>:<WB> Enable T-bit tags with a unified tag cache\n");
+  fprintf(stderr, "  --tt=<S>:<W>:<B>:<WB>  Enable T-bit tags with a separate tag cache\n");
   fprintf(stderr, "  --tm0=<S>:<W>:<B>:<WB> Use separate tag map 0\n");
   fprintf(stderr, "  --tm1=<S>:<W>:<B>:<WB> Use separate tag map 1\n");
-  fprintf(stderr, "  --extension=<name>    Specify RoCC Extension\n");
-  fprintf(stderr, "  --extlib=<name>       Shared library to load\n");
-  fprintf(stderr, "  --dump-config-string  Print platform configuration string and exit\n");
+  fprintf(stderr, "  --extension=<name>     Specify RoCC Extension\n");
+  fprintf(stderr, "  --extlib=<name>        Shared library to load\n");
+  fprintf(stderr, "  --dump-config-string   Print platform configuration string and exit\n");
   exit(1);
 }
 
@@ -47,6 +48,7 @@ int main(int argc, char** argv)
   bool dump_config_string = false;
   size_t nprocs = 1;
   size_t mem_mb = 0;
+  size_t tagsz = 0;
   std::unique_ptr<icache_sim_t> ic;
   std::unique_ptr<dcache_sim_t> dc;
   std::unique_ptr<cache_sim_t> l2;
@@ -63,6 +65,7 @@ int main(int argc, char** argv)
   parser.option('l', 0, 0, [&](const char* s){log = true;});
   parser.option('p', 0, 1, [&](const char* s){nprocs = atoi(s);});
   parser.option('m', 0, 1, [&](const char* s){mem_mb = atoi(s);});
+  parser.option('t', 0, 1, [&](const char* s){tagsz = atoi(s);});
   parser.option(0, "ic", 1, [&](const char* s){ic.reset(new icache_sim_t(s));});
   parser.option(0, "dc", 1, [&](const char* s){dc.reset(new dcache_sim_t(s));});
   parser.option(0, "l2", 1, [&](const char* s){l2.reset(cache_sim_t::construct(s, "L2$"));});
@@ -83,19 +86,19 @@ int main(int argc, char** argv)
 
   auto argv1 = parser.parse(argv);
   std::vector<std::string> htif_args(argv1, (const char*const*)argv + argc);
-  sim_t s(isa, nprocs, mem_mb, htif_args);
+  sim_t s(isa, nprocs, mem_mb, tagsz, htif_args);
 
-  if(tt_cfg.size())
+  if(tagsz && tt_cfg.size())
     tt.reset(tag_table_sim_t::construct(tt_cfg.c_str(), "TT$", &s));
-  if(tt_cfg.size() && tm0_cfg.size()) {
+  if(tagsz && tt_cfg.size() && tm0_cfg.size()) {
     tm0_cfg += tt->extra_config_string();
     tm0.reset(tag_map_sim_t::construct(tm0_cfg.c_str(), "TM0$", &s));
   }
-  if(tt_cfg.size() && tm0_cfg.size() && tm1_cfg.size()) {
+  if(tagsz && tt_cfg.size() && tm0_cfg.size() && tm1_cfg.size()) {
     tm1_cfg += tm0->extra_config_string();
     tm1.reset(tag_map_sim_t::construct(tm1_cfg.c_str(), "TM1$", &s));
   }
-  if(!tt_cfg.size() && utc_cfg.size())
+  if(tagsz && !tt_cfg.size() && utc_cfg.size())
     utc.reset(unified_tag_cache_sim_t::construct(utc_cfg.c_str(), "UTC$", &s));
 
   if (dump_config_string) {
@@ -114,6 +117,19 @@ int main(int argc, char** argv)
     if (dc) s.get_core(i)->get_mmu()->register_memtracer(&*dc);
     if (extension) s.get_core(i)->register_extension(extension());
   }
+
+  // tag cache
+  if(l2) {
+    if(tt) l2->set_miss_handler(&*tt);
+    else if(utc) l2->set_miss_handler(&*utc);
+  } else {
+    if(ic && tt) ic->set_miss_handler(&*tt);
+    if(dc && tt) dc->set_miss_handler(&*tt);
+    if(ic && !tt && utc) ic->set_miss_handler(&*utc);
+    if(dc && !tt && utc) dc->set_miss_handler(&*utc);
+  }
+  if(tt && tm0) tt->set_tag_map(&*tm0);
+  if(tt && tm0 && tm1) tm0->set_tag_map(&*tm1);
 
   s.set_debug(debug);
   s.set_log(log);

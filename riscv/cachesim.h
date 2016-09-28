@@ -113,7 +113,7 @@ class dcache_sim_t : public cache_memtracer_t
   dcache_sim_t(const char* config) : cache_memtracer_t(config, "D$") {}
   bool interested_in_range(uint64_t begin, uint64_t end, access_type type)
   {
-    return type == LOAD || type == STORE;
+    return (type == LOAD || type == STORE);
   }
   void trace(uint64_t addr, size_t bytes, access_type type)
   {

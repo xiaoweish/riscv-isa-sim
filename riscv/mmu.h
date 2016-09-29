@@ -41,15 +41,16 @@ public:
 #define load_func(type, signed)                                     \
     reg_t load_##type(word_t addr) __attribute__((always_inline)) { \
       type##_t res; \
+      uint64_t tag; \
       if (addr & (sizeof(type##_t)-1)) \
         throw trap_load_address_misaligned(addr); \
       word_t vpn = addr >> PGSHIFT; \
       if (likely(tlb_load_tag[vpn % TLB_ENTRIES] == vpn)) {     \
         res = *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + addr); \
-      } else {                                                  \
-        load_slow_path(addr, sizeof(type##_t), (uint8_t*)&res); \
-      }                                                         \
-      return reg_t(signed ? (sword_t)(res) : (word_t)(res));    \
+        tag = load_tag(sim->mem_to_addr(tlb_data[vpn % TLB_ENTRIES] + addr)); \
+      } else \
+        load_slow_path(addr, sizeof(type##_t), (uint8_t*)&res, &tag); \
+      return reg_t(signed ? (sword_t)(res) : (word_t)(res), tag); \
     }
 
   // load value from memory at aligned address; zero extend to register width
@@ -70,10 +71,11 @@ public:
       if (addr & (sizeof(type##_t)-1)) \
         throw trap_store_address_misaligned(addr); \
       word_t vpn = addr >> PGSHIFT; \
-      if (likely(tlb_store_tag[vpn % TLB_ENTRIES] == vpn)) \
+      if (likely(tlb_store_tag[vpn % TLB_ENTRIES] == vpn)) { \
         *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + addr) = (type##_t)(val.data); \
-      else \
-        store_slow_path(addr, sizeof(type##_t), (const uint8_t*)&(val.data));  \
+        store_tag(sim->mem_to_addr(tlb_data[vpn % TLB_ENTRIES] + addr), val.tag); \
+      } else \
+        store_slow_path(addr, sizeof(type##_t), (const uint8_t*)&(val.data), val.tag); \
     }
 
   // store value to memory at aligned address
@@ -92,7 +94,9 @@ public:
   inline icache_entry_t* refill_icache(word_t addr, icache_entry_t* entry)
   {
     const uint16_t* iaddr = translate_insn_addr(addr);
+    word_t paddr = sim->mem_to_addr((char*)iaddr);
     word_t insn_m = *iaddr;
+    uint64_t insn_tag = load_tag(paddr);
     int length = insn_length(insn_m);
 
     if (likely(length == 4)) {
@@ -109,12 +113,11 @@ public:
       insn_m |= (word_t)*(const uint16_t*)translate_insn_addr(addr + 2) << 16;
     }
 
-    insn_t insn = insn_t(insn_bits_t(insn_m));
+    insn_t insn = insn_t(insn_bits_t(insn_m, insn_tag));
     insn_fetch_t fetch = {proc->decode_insn(insn), insn};
     entry->tag = addr;
     entry->data = fetch;
 
-    word_t paddr = sim->mem_to_addr((char*)iaddr);
     if (sim->cacheable(paddr) && tracer.interested_in_range(paddr, paddr + 1, FETCH)) {
       entry->tag = -1;
       tracer.trace(paddr, length, FETCH);
@@ -164,8 +167,8 @@ private:
 
   // handle uncommon cases: TLB misses, page faults, MMIO
   const uint16_t* fetch_slow_path(word_t addr);
-  void load_slow_path(word_t addr, word_t len, uint8_t* bytes);
-  void store_slow_path(word_t addr, word_t len, const uint8_t* bytes);
+  void load_slow_path(word_t addr, word_t len, uint8_t* bytes, uint64_t * tag);
+  void store_slow_path(word_t addr, word_t len, const uint8_t* bytes, uint64_t tag);
   word_t translate(word_t addr, access_type type);
 
   // ITLB lookup
@@ -174,6 +177,21 @@ private:
     if (likely(tlb_insn_tag[vpn % TLB_ENTRIES] == vpn))
       return (uint16_t*)(tlb_data[vpn % TLB_ENTRIES] + addr);
     return fetch_slow_path(addr);
+  }
+
+  // get tag
+  uint64_t load_tag(uint64_t addr) {
+    if(!sim->cacheable(addr)) return 0;
+    uint64_t tag = *(uint64_t *)(sim->addr_to_mem(tg::addr_conv(0, addr)));
+    return tg::extract_tag(0, addr, tag);
+  }
+
+  void store_tag(uint64_t addr, int64_t wtag) {
+    if(!sim->cacheable(addr)) return;
+    uint64_t tag = *(uint64_t *)(sim->addr_to_mem(tg::addr_conv(0, addr)));
+    uint64_t mask = tg::mask(0, addr);
+    tag = (tag & ~mask) | ((wtag << tg::tag_offset(0, addr)) & mask);
+    *(uint64_t *)(sim->addr_to_mem(tg::addr_conv(0, addr))) = tag;
   }
   
   friend class processor_t;

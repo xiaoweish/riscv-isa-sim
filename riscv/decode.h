@@ -31,19 +31,19 @@ typedef int64_t  sword_t;
 typedef uint64_t fword_t;
 typedef uint64_t insn_word_t;
 class reg_t;
-class sreg_t : public tagged_data_t<sword_t, uint32_t> {};
-class freg_t : public tagged_data_t<fword_t, uint32_t>
+class sreg_t : public tagged_data_t<sword_t, uint64_t> {};
+class freg_t : public tagged_data_t<fword_t, uint64_t>
 {
  public:
-  freg_t(fword_t data, uint32_t tag = 0)
+  freg_t(fword_t data, uint64_t tag = 0)
     : tagged_data_t(data, tag) {}
   freg_t(const reg_t &r);
   freg_t() {}
 };
-class reg_t  : public tagged_data_t<word_t, uint32_t>
+class reg_t  : public tagged_data_t<word_t, uint64_t>
 {
  public:
-  reg_t(word_t data, uint32_t tag = 0)
+  reg_t(word_t data, uint64_t tag = 0)
     : tagged_data_t(data, tag) {}
   reg_t(const freg_t &r);
   reg_t(const sreg_t &r);
@@ -88,10 +88,10 @@ const int NCSR = 4096;
 #define MAX_INSN_LENGTH 8
 #define PC_ALIGN 2
 
-class insn_bits_t : public tagged_data_t<insn_word_t, uint32_t>
+class insn_bits_t : public tagged_data_t<insn_word_t, uint64_t>
 {
  public:
-  insn_bits_t(insn_word_t insn, uint32_t tag = 0)
+  insn_bits_t(insn_word_t insn, uint64_t tag = 0)
     : tagged_data_t(insn, tag) {}
   insn_bits_t() {}
 };

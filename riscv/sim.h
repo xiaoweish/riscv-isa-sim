@@ -8,6 +8,7 @@
 #include <memory>
 #include "processor.h"
 #include "devices.h"
+#include "tag.h"
 
 class htif_isasim_t;
 class mmu_t;
@@ -33,6 +34,8 @@ public:
   // returns the number of processors in this simulator
   size_t num_cores() { return procs.size(); }
   processor_t* get_core(size_t i) { return procs.at(i); }
+
+  size_t get_memsz() { return memsz; }
 
 private:
   std::unique_ptr<htif_isasim_t> htif;
@@ -62,7 +65,7 @@ private:
     return addr >= DRAM_BASE && addr < DRAM_BASE + memsz;
   }
   char* addr_to_mem(word_t addr) { return mem + addr - DRAM_BASE; }
-  char* addr_to_tagmem(word_t addr, size_t tag_base) { return tagmem + addr - tag_base; }
+  char* addr_to_tagmem(word_t addr) { return tagmem + addr - tg::tagbase; }
   word_t mem_to_addr(char* x) { return x - mem + DRAM_BASE; }
   bool cacheable(word_t addr) { return addr >= DRAM_BASE && addr < DRAM_BASE + memsz; }
   bool mmio_load(word_t addr, size_t len, uint8_t* bytes);

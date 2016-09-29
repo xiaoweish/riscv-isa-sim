@@ -6,6 +6,7 @@
 #include "cachesim.h"
 #include "tagcachesim.h"
 #include "extension.h"
+#include "tag.h"
 #include <dlfcn.h>
 #include <fesvr/option_parser.h>
 #include <stdio.h>
@@ -88,18 +89,18 @@ int main(int argc, char** argv)
   std::vector<std::string> htif_args(argv1, (const char*const*)argv + argc);
   sim_t s(isa, nprocs, mem_mb, tagsz, htif_args);
 
+  if(tagsz)
+    tg::record_mem(DRAM_BASE, s.get_memsz(), 64);
   if(tagsz && tt_cfg.size())
-    tt.reset(tag_table_sim_t::construct(tt_cfg.c_str(), "TT$", &s));
-  if(tagsz && tt_cfg.size() && tm0_cfg.size()) {
-    tm0_cfg += tt->extra_config_string();
-    tm0.reset(tag_map_sim_t::construct(tm0_cfg.c_str(), "TM0$", &s));
-  }
-  if(tagsz && tt_cfg.size() && tm0_cfg.size() && tm1_cfg.size()) {
-    tm1_cfg += tm0->extra_config_string();
-    tm1.reset(tag_map_sim_t::construct(tm1_cfg.c_str(), "TM1$", &s));
-  }
+    tt.reset(sep_tag_cache_sim_t::construct(tt_cfg.c_str(), "TT$", &s, 0, tagsz));
+  if(tagsz && tt_cfg.size() && tm0_cfg.size())
+    tm0.reset(sep_tag_cache_sim_t::construct(tm0_cfg.c_str(), "TM0$", &s, 1, 1));
+  if(tagsz && tt_cfg.size() && tm0_cfg.size() && tm1_cfg.size())
+    tm1.reset(sep_tag_cache_sim_t::construct(tm1_cfg.c_str(), "TM1$", &s, 2, 1));
   if(tagsz && !tt_cfg.size() && utc_cfg.size())
-    utc.reset(unified_tag_cache_sim_t::construct(utc_cfg.c_str(), "UTC$", &s));
+    utc.reset(uni_tag_cache_sim_t::construct(utc_cfg.c_str(), "UTC$", &s, tagsz));
+  if(tagsz && (tt_cfg.size() || utc_cfg.size()))
+    tg::init();
 
   if (dump_config_string) {
     printf("%s", s.get_config_string());

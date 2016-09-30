@@ -49,7 +49,7 @@ int main(int argc, char** argv)
   bool dump_config_string = false;
   size_t nprocs = 1;
   size_t mem_mb = 0;
-  size_t tagsz = 0;
+  size_t tagsz = 1;             // set to 1 bit tag by default
   std::unique_ptr<icache_sim_t> ic;
   std::unique_ptr<dcache_sim_t> dc;
   std::unique_ptr<cache_sim_t> l2;
@@ -89,18 +89,17 @@ int main(int argc, char** argv)
   std::vector<std::string> htif_args(argv1, (const char*const*)argv + argc);
   sim_t s(isa, nprocs, mem_mb, tagsz, htif_args);
 
-  if(tagsz)
-    tg::record_mem(DRAM_BASE, s.get_memsz(), 64);
-  if(tagsz && tt_cfg.size())
+  tg::record_mem(DRAM_BASE, s.get_memsz(), 64, tagsz);
+  if(tt_cfg.size())
     tt.reset(sep_tag_cache_sim_t::construct(tt_cfg.c_str(), "TT$", &s, 0, tagsz));
-  if(tagsz && tt_cfg.size() && tm0_cfg.size())
+  if(tt_cfg.size() && tm0_cfg.size())
     tm0.reset(sep_tag_cache_sim_t::construct(tm0_cfg.c_str(), "TM0$", &s, 1, 1));
-  if(tagsz && tt_cfg.size() && tm0_cfg.size() && tm1_cfg.size())
+  if(tt_cfg.size() && tm0_cfg.size() && tm1_cfg.size())
     tm1.reset(sep_tag_cache_sim_t::construct(tm1_cfg.c_str(), "TM1$", &s, 2, 1));
-  if(tagsz && !tt_cfg.size() && utc_cfg.size())
+  if(!tt_cfg.size() && utc_cfg.size())
     utc.reset(uni_tag_cache_sim_t::construct(utc_cfg.c_str(), "UTC$", &s, tagsz));
-  if(tagsz && (tt_cfg.size() || utc_cfg.size()))
-    tg::init();
+
+  tg::init();
 
   if (dump_config_string) {
     printf("%s", s.get_config_string());

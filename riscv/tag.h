@@ -33,10 +33,12 @@ class tg {
  public:
   static uint64_t tagbase;
 
-  static void record_mem(uint64_t membase_, uint64_t memsize_, uint64_t wordsz_) {
+  static void record_mem(uint64_t membase_, uint64_t memsize_, uint64_t wordsz_, uint64_t tagsz_) {
     membase = membase_;
     memsz = memsize_;
     wordsz = wordsz_;
+    if(data.size() == 0) data.resize(1);
+    data[0].tagsz = tagsz_;
   }
 
   static void record_tc(unsigned int level, uint64_t tagsz, uint64_t linesz) {

@@ -47,7 +47,7 @@ public:
       word_t vpn = addr >> PGSHIFT; \
       if (likely(tlb_load_tag[vpn % TLB_ENTRIES] == vpn)) {     \
         res = *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + addr); \
-        tag = load_tag(sim->mem_to_addr(tlb_data[vpn % TLB_ENTRIES] + addr)); \
+        tag = read_tag(sim->mem_to_addr(tlb_data[vpn % TLB_ENTRIES] + addr)); \
       } else \
         load_slow_path(addr, sizeof(type##_t), (uint8_t*)&res, &tag); \
       return reg_t(signed ? (sword_t)(res) : (word_t)(res), tag); \
@@ -65,6 +65,19 @@ public:
   load_func(int32, 1)
   load_func(int64, 1)
 
+  // load tag
+  reg_t load_tag(word_t addr) __attribute__((always_inline)) {
+    uint64_t tag;
+    if (addr & (sizeof(word_t)-1))
+      throw trap_load_address_misaligned(addr);
+    word_t vpn = addr >> PGSHIFT;
+    if (likely(tlb_load_tag[vpn % TLB_ENTRIES] == vpn))
+      tag = read_tag(sim->mem_to_addr(tlb_data[vpn % TLB_ENTRIES] + addr));
+    else
+      load_slow_path(addr, 0, NULL, &tag);
+    return reg_t(tag);
+  }
+
   // template for functions that store an aligned value to memory
   #define store_func(type) \
     void store_##type(word_t addr, reg_t val) { \
@@ -73,9 +86,9 @@ public:
       word_t vpn = addr >> PGSHIFT; \
       if (likely(tlb_store_tag[vpn % TLB_ENTRIES] == vpn)) { \
         *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + addr) = (type##_t)(val.data); \
-        store_tag(sim->mem_to_addr(tlb_data[vpn % TLB_ENTRIES] + addr), val.tag); \
+        write_tag(sim->mem_to_addr(tlb_data[vpn % TLB_ENTRIES] + addr), val.tag); \
       } else \
-        store_slow_path(addr, sizeof(type##_t), (const uint8_t*)&(val.data), val.tag); \
+        store_slow_path(addr, sizeof(type##_t), (const uint8_t*)&(val.data), &(val.tag)); \
     }
 
   // store value to memory at aligned address
@@ -83,6 +96,16 @@ public:
   store_func(uint16)
   store_func(uint32)
   store_func(uint64)
+
+  void store_tag(word_t addr, reg_t val) {
+    if (addr & (sizeof(word_t)-1))
+      throw trap_load_address_misaligned(addr);
+    word_t vpn = addr >> PGSHIFT;
+    if (likely(tlb_load_tag[vpn % TLB_ENTRIES] == vpn))
+      write_tag(sim->mem_to_addr(tlb_data[vpn % TLB_ENTRIES] + addr), val.data);
+    else
+      store_slow_path(addr, 0, NULL, &(val.data));
+  }
 
   static const word_t ICACHE_ENTRIES = 1024;
 
@@ -96,7 +119,7 @@ public:
     const uint16_t* iaddr = translate_insn_addr(addr);
     word_t paddr = sim->mem_to_addr((char*)iaddr);
     word_t insn_m = *iaddr;
-    uint64_t insn_tag = load_tag(paddr);
+    uint64_t insn_tag = read_tag(paddr);
     int length = insn_length(insn_m);
 
     if (likely(length == 4)) {
@@ -168,7 +191,7 @@ private:
   // handle uncommon cases: TLB misses, page faults, MMIO
   const uint16_t* fetch_slow_path(word_t addr);
   void load_slow_path(word_t addr, word_t len, uint8_t* bytes, uint64_t * tag);
-  void store_slow_path(word_t addr, word_t len, const uint8_t* bytes, uint64_t tag);
+  void store_slow_path(word_t addr, word_t len, const uint8_t* bytes, uint64_t *tag);
   word_t translate(word_t addr, access_type type);
 
   // ITLB lookup
@@ -180,13 +203,13 @@ private:
   }
 
   // get tag
-  uint64_t load_tag(uint64_t addr) {
+  uint64_t read_tag(uint64_t addr) {
     if(!sim->cacheable(addr)) return 0;
     uint64_t tag = *(uint64_t *)(sim->addr_to_mem(tg::addr_conv(0, addr)));
     return tg::extract_tag(0, addr, tag);
   }
 
-  void store_tag(uint64_t addr, int64_t wtag) {
+  void write_tag(uint64_t addr, int64_t wtag) {
     if(!sim->cacheable(addr)) return;
     uint64_t tag = *(uint64_t *)(sim->addr_to_mem(tg::addr_conv(0, addr)));
     uint64_t mask = tg::mask(0, addr);

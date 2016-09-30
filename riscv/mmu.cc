@@ -70,9 +70,8 @@ void mmu_t::load_slow_path(word_t addr, word_t len, uint8_t* bytes, uint64_t *ta
   if (sim->addr_is_mem(paddr)) {
     //memcpy(&bytes, sim->addr_to_mem(paddr), len);
     char *ppaddr = sim->addr_to_mem(paddr);
-    for(word_t i=0; i<len; i++)
-      *(bytes++) = *(ppaddr++);
-    *tag = load_tag(paddr);
+    if(bytes != NULL) for(word_t i=0; i<len; i++) *(bytes++) = *(ppaddr++);
+    if(tag != NULL) *tag = read_tag(paddr);
     if (sim->cacheable(paddr) && tracer.interested_in_range(paddr, paddr + PGSIZE, LOAD))
       tracer.trace(paddr, len, LOAD);
     else
@@ -82,12 +81,12 @@ void mmu_t::load_slow_path(word_t addr, word_t len, uint8_t* bytes, uint64_t *ta
   }
 }
 
-void mmu_t::store_slow_path(word_t addr, word_t len, const uint8_t* bytes, uint64_t tag)
+void mmu_t::store_slow_path(word_t addr, word_t len, const uint8_t* bytes, uint64_t *tag)
 {
   word_t paddr = translate(addr, STORE);
   if (sim->addr_is_mem(paddr)) {
-    memcpy(sim->addr_to_mem(paddr), bytes, len);
-    store_tag(paddr, tag);
+    if(bytes != NULL) memcpy(sim->addr_to_mem(paddr), bytes, len);
+    if(tag != NULL) write_tag(paddr, *tag);
     if (sim->cacheable(paddr) && tracer.interested_in_range(paddr, paddr + PGSIZE, STORE))
       tracer.trace(paddr, len, STORE);
     else

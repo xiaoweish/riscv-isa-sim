@@ -59,33 +59,37 @@ uint64_t* tag_cache_sim_t::check_tag(uint64_t addr, size_t &row) {
 
 uint64_t* tag_cache_sim_t::victimize(uint64_t addr, size_t &row) {
   size_t idx = (addr >> idx_shift) & (sets-1);
-  size_t way = lfsr.next() % ways;
+  size_t way = ways;
+  // check whether there is invalid or empty line first
+  //for (size_t i = 0; i < ways; i++) {
+  //  if((tags[idx*ways + i] & (VALID|TAGFLAG)) != (VALID|TAGFLAG)) {
+  //    way = i;
+  //    break;
+  //  }
+  //}
+  if(way == ways) way = lfsr.next() % ways;
   row = idx*ways + way;
   return &tags[row];
 }
 
 void tag_cache_sim_t::refill(uint64_t addr, size_t row) {
+  tags[row] = (addr >> idx_shift) | VALID;
+  addr = tags[row] << idx_shift;
   memcpy(datas + row*linesz, sim->addr_to_tagmem(addr), linesz);
-  if(!memcmp(datas + row*linesz, empty_block, linesz)) {
-    tags[row] = (addr >> idx_shift) | VALID;
-  } else {
-    tags[row] = (addr >> idx_shift) | VALID | TAGFLAG;
+  if(memcmp(datas + row*linesz, empty_block, linesz)) {
+    tags[row] |= TAGFLAG;
   }
 }
 
 void tag_cache_sim_t::writeback(size_t row) {
-  if((tags[row] & (VALID|DIRTY)) != (VALID|DIRTY)) return;
-  if(wb_enforce || (tags[row] & TAGFLAG) || tag_map == NULL) {
+  if((tags[row] & (VALID|DIRTY)) == (VALID|DIRTY)) {
     uint64_t addr = tags[row] << idx_shift;
-    memcpy(sim->addr_to_tagmem(addr), datas + row*linesz, linesz);
-    writebacks++;
+    if(wb_enforce || (tags[row] & TAGFLAG) || tg::is_top(addr)) {
+      memcpy(sim->addr_to_tagmem(addr), datas + row*linesz, linesz);
+      writebacks++;
+    }
   }
   tags[row] = 0;
-}
-
-void tag_cache_sim_t::verify(size_t row) {
-  uint64_t addr = tags[row] << idx_shift;
-  assert(!memcmp(sim->addr_to_mem(addr), sim->addr_to_tagmem(addr), linesz));
 }
 
 uint64_t tag_cache_sim_t::read(uint64_t addr, uint64_t &data, uint8_t fetch) {
@@ -99,7 +103,7 @@ uint64_t tag_cache_sim_t::read(uint64_t addr, uint64_t &data, uint8_t fetch) {
     read_misses++;
   }
   if((*tag) & TAGFLAG) {        // read data
-    data = *(uint64_t *)(datas + data_row_addr(addr, row));
+    data = *(uint64_t *)(datas + row*linesz + subrow(addr));
   } else {                      // cached but empty
     data = 0;
   }
@@ -110,27 +114,26 @@ uint64_t tag_cache_sim_t::write(uint64_t addr, uint64_t data, uint64_t mask) {
   uint64_t rdata, wdata;
   size_t row;
   uint64_t *tag = check_tag(addr, row);
-  uint8_t tagFlag_chg = 0;
+  bool tagFlag_chg = false;
   if(tag == NULL) {
     tag = victimize(addr, row);
     writeback(row);
     refill(addr, row);
     write_misses++;
   }
-  rdata = *(uint64_t *)(datas + data_row_addr(addr, row));
+  rdata = *(uint64_t *)(datas + row*linesz + subrow(addr));
   wdata = (rdata & ~mask) | (data & mask); // get the udpate data
   if(rdata != wdata) {                     // update
-    *(uint64_t *)(datas + data_row_addr(addr, row)) = wdata;
+    *(uint64_t *)(datas + row*linesz + subrow(addr)) = wdata;
     *tag |= DIRTY;
     if(!memcmp(datas + row*linesz, empty_block, linesz)) {
-      tagFlag_chg = (*tag & TAGFLAG) == TAGFLAG;
+      tagFlag_chg = (*tag & TAGFLAG);
       *tag &= ~TAGFLAG;
     } else {
       tagFlag_chg = (*tag & TAGFLAG) == 0;
       *tag |= TAGFLAG;
     }
   }
-  verify(row);
   return tagFlag_chg ? *tag | DIRTY : *tag & ~DIRTY;
 }
 
@@ -138,7 +141,7 @@ uint64_t tag_cache_sim_t::create(uint64_t addr, uint64_t data, uint64_t mask) {
   uint64_t rdata, wdata;
   size_t row;
   uint64_t *tag = check_tag(addr, row);
-  uint8_t tagFlag_chg = 0;
+  bool tagFlag_chg = false;
   if(tag == NULL) {
     tag = victimize(addr, row);
     writeback(row);
@@ -146,20 +149,20 @@ uint64_t tag_cache_sim_t::create(uint64_t addr, uint64_t data, uint64_t mask) {
     *tag |= (addr >> idx_shift) | VALID | DIRTY;
     rdata = 0;
   } else {
-    rdata = *(uint64_t *)(datas + data_row_addr(addr, row));
+    rdata = *(uint64_t *)(datas + row*linesz + subrow(addr));
+    assert(rdata == 0);
   }
   wdata = (rdata & ~mask) | (data & mask); // get the udpate data
   if(rdata != wdata) {                     // update
-    *(uint64_t *)(datas + data_row_addr(addr, row)) = wdata;
+    *(uint64_t *)(datas + row*linesz + subrow(addr)) = wdata;
     *tag |= DIRTY;
     if(!memcmp(datas + row*linesz, empty_block, linesz)) {
       *tag &= ~TAGFLAG;
     } else {
-      tagFlag_chg = 1;
+      tagFlag_chg = true;
       *tag |= TAGFLAG;
     }
   }
-  verify(row);
   return tagFlag_chg ? *tag | DIRTY : *tag & ~DIRTY;
 }
 
@@ -181,20 +184,21 @@ tag_cache_sim_t* sep_tag_cache_sim_t::construct(const char* config, const char* 
   return new sep_tag_cache_sim_t(sets, ways, linesz, wb, name, sim, level);
 }
 
-uint64_t sep_tag_cache_sim_t::access(uint64_t addr, size_t byte, bool store) {
+uint64_t sep_tag_cache_sim_t::access(uint64_t addr, size_t bytes, bool store) {
+  if(level == 0) addr &= ~((uint64_t)bytes-1);
   uint64_t tag_tag, tag_data = 0, tag_addr = tg::addr_conv(level, addr);
-  uint64_t wmask = tg::mask(level, addr);
-  uint64_t wdata = read_mem(tag_addr);
+  uint64_t wmask = level == 0 ? tg::mask(level, addr, bytes) : tg::mask(level, addr, 0);
+  uint64_t wdata = level == 0 ? read_mem(tag_addr) : (bytes ? wmask : 0); // mmu does not write tm bits
   bool map_bit = true;
 
-  if(tag_map != NULL) map_bit = tag_map->access(tag_addr, 1, 0) & wmask;
+  if(tag_map != NULL) map_bit = tag_map->access(tag_addr, 0, 0);
   if(map_bit) tag_tag = read(tag_addr, tag_data, 1);
   bool wen = (wdata & wmask) != (tag_data & wmask);
   if(store && wen) {
     if(map_bit || wb_enforce) tag_tag = write(tag_addr, wdata, wmask);
     else                      tag_tag = create(tag_addr, wdata, wmask);
     if((tag_tag & DIRTY) && tag_map != NULL)
-      tag_map->access(tag_addr, 1, 1);
+      tag_map->access(tag_addr, (tag_tag & TAGFLAG) != 0, 1); // mmu does not write tm bits
   }
 
 #ifdef TC_STAT_BEHAV
@@ -203,7 +207,11 @@ uint64_t sep_tag_cache_sim_t::access(uint64_t addr, size_t byte, bool store) {
   store && wen ? write_accesses++ : read_accesses++;
 #endif
 
-  return store ? 0 : tag_data;
+  if(level == 0 && !store) {
+    assert((wdata & wmask) == (tag_data & wmask));
+  }
+
+  return store ? 0 : tag_data & wmask;
 }
 
 // ----------------- unified tag cache class -------------------- //
@@ -230,10 +238,10 @@ uint64_t uni_tag_cache_sim_t::access(uint64_t addr, size_t bytes, bool store) {
   uint64_t tt_tag = 0,  tt_data = 0,  tt_addr = tg::addr_conv(0, addr);
   uint64_t tm0_tag = 0, tm0_data = 0, tm0_addr = tg::addr_conv(1, tt_addr);
   uint64_t tm1_tag = 0, tm1_data = 0, tm1_addr = tg::addr_conv(2, tm0_addr);
-  uint64_t tt_wmask = tg::mask(0, addr);
+  uint64_t tt_wmask = tg::mask(0, addr, bytes);
   uint64_t tt_wdata = read_mem(tt_addr);
-  uint64_t tm0_wmask = tg::mask(1, tt_addr);
-  uint64_t tm1_wmask = tg::mask(2, tm0_addr);
+  uint64_t tm0_wmask = tg::mask(1, tt_addr, 0);
+  uint64_t tm1_wmask = tg::mask(2, tm0_addr, 0);
   bool wen = false;
 
   enum state_t {s_idle, s_tt_r, s_tm0_r, s_tm1_fr, s_tm0_fr, s_tm0_c, s_tt_fr, s_tt_c, s_tt_w, s_tm0_w, s_tm1_w};

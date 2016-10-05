@@ -86,11 +86,11 @@ void mmu_t::store_slow_path(word_t addr, word_t len, const uint8_t* bytes, uint6
   word_t paddr = translate(addr, STORE);
   if (sim->addr_is_mem(paddr)) {
     if(bytes != NULL) memcpy(sim->addr_to_mem(paddr), bytes, len);
-    if(tag != NULL) write_tag(paddr, *tag);
     if (sim->cacheable(paddr) && tracer.interested_in_range(paddr, paddr + PGSIZE, STORE))
       tracer.trace(paddr, len, STORE);
     else
       refill_tlb(addr, paddr, STORE);
+    if(tag != NULL) write_tag(paddr, *tag);
   } else if (!sim->mmio_store(paddr, len, bytes)) {
     throw trap_store_access_fault(addr);
   }

@@ -55,7 +55,7 @@ class tg {
       data[i].size = (i==0 ? memsz : data[i-1].size)  / data[i].ratio;
       data[i].base = membase + memsz - data[i].size;
       data[i].aoffset = ilog2(data[i].ratio);
-      data[i].moffset = ilog2(data[i].linesz_pre * 8);
+      data[i].moffset = ilog2(data[i].linesz_pre);
       data[i].dmask = ((uint64_t)1 << data[i].tagsz) - 1;
       data[i].amask = 64 / data[i].tagsz - 1;
     }
@@ -63,16 +63,22 @@ class tg {
   }
 
   static uint64_t addr_conv(int i, uint64_t addr) {
-    return data[i].base + ((addr - data[i].base_pre) >> data[i].aoffset);
+    return data[i].base + (((addr - data[i].base_pre) >> data[i].aoffset) & ~0x7);
   }
   static uint64_t tag_offset(int i, uint64_t addr) {
     return ((addr >> data[i].moffset) & data[i].amask) * data[i].tagsz;
   }
-  static uint64_t mask(int i, uint64_t addr) {
-    return data[i].dmask << tag_offset(i, addr);
+  static uint64_t mask(int i, uint64_t addr, size_t bytes) {
+    return (bytes <= 8 ? data[i].dmask :  (((uint64_t)1 << data[i].tagsz*(bytes/8)) - 1)) << tag_offset(i, addr);
   }
   static uint64_t extract_tag(int i, uint64_t addr, uint64_t tag) {
     return (tag >> tag_offset(i, addr)) & data[i].dmask;
+  }
+  static uint64_t addr_conv_rev(int i, uint64_t addr) {
+    return data[i].base_pre + ((addr - data[i].base) << data[i].aoffset);
+  }
+  static bool is_top(uint64_t addr) {
+    return addr >= data[data.size()-1].base;
   }
 };
 

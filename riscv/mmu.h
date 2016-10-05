@@ -47,10 +47,10 @@ public:
       word_t vpn = addr >> PGSHIFT; \
       if (likely(tlb_load_tag[vpn % TLB_ENTRIES] == vpn)) {     \
         res = *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + addr); \
-        tag = read_tag(sim->mem_to_addr(tlb_data[vpn % TLB_ENTRIES] + addr)); \
+        /*tag = read_tag(sim->mem_to_addr(tlb_data[vpn % TLB_ENTRIES] + addr));*/ \
       } else \
-        load_slow_path(addr, sizeof(type##_t), (uint8_t*)&res, &tag); \
-      return reg_t(signed ? (sword_t)(res) : (word_t)(res), tag); \
+        load_slow_path(addr, sizeof(type##_t), (uint8_t*)&res, NULL /*&tag*/); \
+      return reg_t(signed ? (sword_t)(res) : (word_t)(res), 0 /*tag*/); \
     }
 
   // load value from memory at aligned address; zero extend to register width
@@ -86,9 +86,9 @@ public:
       word_t vpn = addr >> PGSHIFT; \
       if (likely(tlb_store_tag[vpn % TLB_ENTRIES] == vpn)) { \
         *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + addr) = (type##_t)(val.data); \
-        write_tag(sim->mem_to_addr(tlb_data[vpn % TLB_ENTRIES] + addr), val.tag); \
+        /*write_tag(sim->mem_to_addr(tlb_data[vpn % TLB_ENTRIES] + addr), val.tag);*/ \
       } else \
-        store_slow_path(addr, sizeof(type##_t), (const uint8_t*)&(val.data), &(val.tag)); \
+        store_slow_path(addr, sizeof(type##_t), (const uint8_t*)&(val.data), NULL /*&(val.tag)*/); \
     }
 
   // store value to memory at aligned address
@@ -119,7 +119,7 @@ public:
     const uint16_t* iaddr = translate_insn_addr(addr);
     word_t paddr = sim->mem_to_addr((char*)iaddr);
     word_t insn_m = *iaddr;
-    uint64_t insn_tag = read_tag(paddr);
+    //uint64_t insn_tag = read_tag(paddr);
     int length = insn_length(insn_m);
 
     if (likely(length == 4)) {
@@ -136,7 +136,7 @@ public:
       insn_m |= (word_t)*(const uint16_t*)translate_insn_addr(addr + 2) << 16;
     }
 
-    insn_t insn = insn_t(insn_bits_t(insn_m, insn_tag));
+    insn_t insn = insn_t(insn_bits_t(insn_m, 0 /*insn_tag*/));
     insn_fetch_t fetch = {proc->decode_insn(insn), insn};
     entry->tag = addr;
     entry->data = fetch;
@@ -212,7 +212,7 @@ private:
   void write_tag(uint64_t addr, int64_t wtag) {
     if(!sim->cacheable(addr)) return;
     uint64_t tag = *(uint64_t *)(sim->addr_to_mem(tg::addr_conv(0, addr)));
-    uint64_t mask = tg::mask(0, addr);
+    uint64_t mask = tg::mask(0, addr, 8);
     tag = (tag & ~mask) | ((wtag << tg::tag_offset(0, addr)) & mask);
     *(uint64_t *)(sim->addr_to_mem(tg::addr_conv(0, addr))) = tag;
   }

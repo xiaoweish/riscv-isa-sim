@@ -31,16 +31,13 @@ class tag_cache_sim_t : public cache_sim_t
   static const uint64_t TAGFLAG = 1ULL << 61;
   uint64_t* check_tag(uint64_t addr, size_t &row);
   uint64_t* victimize(uint64_t addr, size_t &row);
+  uint64_t subrow(uint64_t addr) { return addr & (linesz-7); }
   void refill(uint64_t addr, size_t row);
   void writeback(size_t row);
-  size_t data_row_addr(uint64_t addr, size_t row) {
-    return row*linesz + (addr%linesz & ~(uint64_t)(0x07));
-  }
   size_t memsz() { return sim->memsz; }
   uint64_t read_mem(uint64_t addr) {
     return *(uint64_t *)(sim->addr_to_mem(addr & ~(uint64_t)(0x7)));
   }
-  void verify(size_t row);  // verify that the row data match with actual memory data
 
   uint64_t read(uint64_t addr, uint64_t &data, uint8_t fetch);
   uint64_t write(uint64_t addr, uint64_t data, uint64_t mask);

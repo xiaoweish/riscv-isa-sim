@@ -22,9 +22,9 @@ class tg {
     uint64_t amask;             // address mask for write mask calculation
   } data_t;
 
- private:
-  static uint64_t membase;
+private:
   static uint64_t memsz;
+  static uint64_t membase;
   static uint64_t wordsz;
   static std::vector<data_t> data;
 

@@ -42,7 +42,7 @@ sim_t::sim_t(const char* isa, size_t nprocs, size_t mem_mb, size_t tagsz,
     fprintf(stderr, "warning: only got %lu bytes of target mem (wanted %lu)\n",
             (unsigned long)memsz, (unsigned long)memsz0);
 
-  size_t tagmemsz = memsz / 64 * tagsz;
+  tagmemsz = memsz / 64 * tagsz;
   tagmem = (char*)calloc(1, tagmemsz);
   assert(tagmem != NULL);
 
@@ -181,7 +181,7 @@ void sim_t::make_config_string()
         "ram {\n"
         "  0 {\n"
         "    addr 0x" << DRAM_BASE << ";\n"
-        "    size 0x" << memsz << ";\n"
+    "    size 0x" << memsz - tagmemsz << ";\n"
         "  };\n"
         "};\n"
         "core {\n";

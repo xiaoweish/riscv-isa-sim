@@ -42,6 +42,7 @@ private:
   char* mem; // main memory
   char *tagmem; // mirror tag partition, used for verification
   size_t memsz; // memory size in bytes
+  size_t tagmemsz;
   size_t tagsz; // number of tag bits per 64-bit word
   mmu_t* debug_mmu;  // debug port into main memory
   std::vector<processor_t*> procs;

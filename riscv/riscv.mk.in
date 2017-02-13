@@ -207,7 +207,6 @@ riscv_insn_list = \
 	lhu \
 	lr_d \
 	lr_w \
-	ltag \
 	lui \
 	lw \
 	lwu \
@@ -246,7 +245,6 @@ riscv_insn_list = \
 	srli \
 	srliw \
 	srlw \
-	stag \
 	sub \
 	subw \
 	sw \

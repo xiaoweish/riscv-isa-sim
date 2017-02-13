@@ -186,11 +186,7 @@ private:
   void refill_tlb(word_t vaddr, word_t paddr, access_type type);
 
   // perform a page table walk for a given VA; set referenced/dirty bits
-<<<<<<< HEAD
-  word_t walk(word_t addr, access_type type, bool supervisor, bool pum);
-=======
   word_t walk(word_t addr, access_type type, word_t prv);
->>>>>>> 6ec74db5ac6987
 
   // handle uncommon cases: TLB misses, page faults, MMIO
   const uint16_t* fetch_slow_path(word_t addr);

@@ -379,6 +379,9 @@ disassembler_t::disassembler_t()
   DEFINE_ITYPE(srliw);
   DEFINE_ITYPE(sraiw);
 
+  DISASM_INSN("tagr", tagr, mask_imm, {&xrd, &xrs1});
+  DISASM_INSN("tagw", tagw, mask_imm, {&xrd, &xrs1});
+
   DEFINE_RTYPE(add);
   DEFINE_RTYPE(sub);
   DEFINE_RTYPE(sll);

@@ -11,6 +11,7 @@
 #include <string.h>
 #include <strings.h>
 #include "encoding.h"
+#include "defines.h"
 #include "config.h"
 #include "common.h"
 #include <cinttypes>

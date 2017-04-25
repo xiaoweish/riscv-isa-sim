@@ -16,6 +16,7 @@ riscv_hdrs = \
 	sim.h \
 	trap.h \
 	encoding.h \
+	defines.h \
 	cachesim.h \
 	tagcachesim.h \
 	tag.h \

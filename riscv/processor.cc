@@ -351,6 +351,8 @@ void processor_t::set_csr(int which, word_t val)
     case CSR_MSCRATCH: state.mscratch = val; break;
     case CSR_MCAUSE: state.mcause = val; break;
     case CSR_MBADADDR: state.mbadaddr = val; break;
+    case CSR_MTAGCTRL:
+    case CSR_STAGCTRL:
     case CSR_UTAGCTRL: state.tagctrl = val; break;
   }
 }
@@ -440,6 +442,8 @@ word_t processor_t::get_csr(int which)
     case CSR_MTVEC: return state.mtvec;
     case CSR_MEDELEG: return state.medeleg;
     case CSR_MIDELEG: return state.mideleg;
+    case CSR_MTAGCTRL:
+    case CSR_STAGCTRL:
     case CSR_UTAGCTRL: return state.tagctrl;
   }
   throw trap_illegal_instruction();

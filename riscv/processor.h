@@ -78,7 +78,7 @@ struct state_t
 class processor_t : public abstract_device_t
 {
 public:
-  processor_t(const char* isa, sim_t* sim, uint32_t id);
+  processor_t(const char* isa, sim_t* sim, uint32_t id, uint32_t tagsz=4);
   ~processor_t();
 
   void set_debug(bool value);
@@ -92,6 +92,7 @@ public:
   mmu_t* get_mmu() { return mmu; }
   state_t* get_state() { return &state; }
   extension_t* get_extension() { return ext; }
+  uint32_t get_tagsz() { return tagsz; }
   bool supports_extension(unsigned char ext) {
     if (ext >= 'a' && ext <= 'z') ext += 'A' - 'a';
     return ext >= 'A' && ext <= 'Z' && ((isa >> (ext - 'A')) & 1);
@@ -121,6 +122,7 @@ private:
   bool run; // !reset
   bool debug;
   bool histogram_enabled;
+  uint32_t tagsz;
 
   std::vector<insn_desc_t> instructions;
   std::map<word_t,uint64_t> pc_histogram;

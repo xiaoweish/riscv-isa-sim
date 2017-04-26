@@ -20,11 +20,16 @@
 #undef STATE
 #define STATE state
 
-processor_t::processor_t(const char* isa, sim_t* sim, uint32_t id)
+processor_t::processor_t(const char* isa, sim_t* sim, uint32_t id, uint32_t tagsz)
   : sim(sim), ext(NULL), disassembler(new disassembler_t),
-    id(id), run(false), debug(false)
+    id(id), run(false), debug(false), tagsz(tagsz)
 {
   parse_isa_string(isa);
+
+  if (tagsz >= max_xlen) {
+    fprintf(stderr, "error: tagsz can't be greater than xlen");
+    abort();
+  }
 
   mmu = new mmu_t(sim, this);
 

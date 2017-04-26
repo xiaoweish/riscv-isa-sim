@@ -61,6 +61,7 @@ struct state_t
   word_t stvec;
   word_t sptbr;
   word_t scause;
+  word_t tagctrl;
   uint32_t fflags;
   uint32_t frm;
   bool serialized; // whether timer CSRs are in a well-defined state

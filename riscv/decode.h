@@ -168,6 +168,7 @@ private:
 #define RS1 READ_REG(insn.rs1())
 #define RS1_TAG READ_REG_TAG(insn.rs1())
 #define RS2 READ_REG(insn.rs2())
+#define RS2_TAG READ_REG_TAG(insn.rs2())
 #define WRITE_RD(value) WRITE_REG(insn.rd(), value)
 #define WRITE_RD_TAG(value) WRITE_REG_TAG(insn.rd(), value)
 

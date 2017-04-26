@@ -249,6 +249,8 @@ riscv_insn_list = \
 	sub \
 	subw \
 	sw \
+	tagr \
+	tagw \
 	wfi \
 	xor \
 	xori \

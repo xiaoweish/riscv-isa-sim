@@ -6,4 +6,4 @@ s = set_field(s, MSTATUS_UIE << prev_prv, get_field(s, MSTATUS_MPIE));
 s = set_field(s, MSTATUS_MPIE, 0);
 s = set_field(s, MSTATUS_MPP, PRV_U);
 p->set_privilege(prev_prv);
-p->set_csr(CSR_MSTATUS, s);
+p->set_csr(CSR_MSTATUS, s, 0);

@@ -45,9 +45,12 @@ struct state_t
   word_t prv;
   word_t mstatus;
   word_t mepc;
+  word_t mepc_tag;
   word_t mbadaddr;
   word_t mscratch;
+  word_t mscratch_tag;
   word_t mtvec;
+  word_t mtvec_tag;
   word_t mcause;
   word_t minstret;
   word_t mie;
@@ -57,12 +60,21 @@ struct state_t
   word_t mucounteren;
   word_t mscounteren;
   word_t sepc;
+  word_t sepc_tag;
   word_t sbadaddr;
   word_t sscratch;
+  word_t sscratch_tag;
   word_t stvec;
+  word_t stvec_tag;
   word_t sptbr;
   word_t scause;
-  word_t tagctrl;
+  word_t mtagctrl;
+  word_t mtagcntl_scratch;
+  word_t mtagcntl_scratch_tag;
+  word_t stagctrl;
+  word_t stagctrl_scratch;
+  word_t stagctrl_scratch_tag;
+  word_t utagctrl;
   uint32_t fflags;
   uint32_t frm;
   bool serialized; // whether timer CSRs are in a well-defined state
@@ -87,9 +99,9 @@ public:
   void reset(bool value);
   void step(size_t n); // run for n cycles
   bool running() { return run; }
-  void set_csr(int which, word_t val);
+  void set_csr(int which, word_t val, word_t tag);
   void raise_interrupt(word_t which);
-  word_t get_csr(int which);
+  word_t get_csr(int which, word_t *old_tag);
   mmu_t* get_mmu() { return mmu; }
   state_t* get_state() { return &state; }
   extension_t* get_extension() { return ext; }

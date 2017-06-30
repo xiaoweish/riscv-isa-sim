@@ -149,7 +149,7 @@ void processor_t::reset(bool value)
   run = !value;
 
   state.reset();
-  set_csr(CSR_MSTATUS, state.mstatus);
+  set_csr(CSR_MSTATUS, state.mstatus, 0);
 
   if (ext)
     ext->reset(); // reset the extension
@@ -220,7 +220,7 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
     s = set_field(s, MSTATUS_SPIE, get_field(s, MSTATUS_UIE << state.prv));
     s = set_field(s, MSTATUS_SPP, state.prv);
     s = set_field(s, MSTATUS_SIE, 0);
-    set_csr(CSR_MSTATUS, s);
+    set_csr(CSR_MSTATUS, s, 0);
     set_privilege(PRV_S);
   } else {
     state.pc = state.mtvec;
@@ -233,7 +233,7 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
     s = set_field(s, MSTATUS_MPIE, get_field(s, MSTATUS_UIE << state.prv));
     s = set_field(s, MSTATUS_MPP, state.prv);
     s = set_field(s, MSTATUS_MIE, 0);
-    set_csr(CSR_MSTATUS, s);
+    set_csr(CSR_MSTATUS, s, 0);
     set_privilege(PRV_M);
   }
 
@@ -256,7 +256,7 @@ static bool validate_vm(int max_xlen, word_t vm)
   return vm == VM_MBARE;
 }
 
-void processor_t::set_csr(int which, word_t val)
+void processor_t::set_csr(int which, word_t val, word_t tag)
 {
   val = zext_xlen(val);
   word_t delegable_ints = MIP_SSIP | MIP_STIP | (1 << IRQ_COP);
@@ -332,33 +332,52 @@ void processor_t::set_csr(int which, word_t val)
     case CSR_SSTATUS: {
       word_t mask = SSTATUS_SIE | SSTATUS_SPIE | SSTATUS_SPP | SSTATUS_FS
                  | SSTATUS_XS | SSTATUS_PUM;
-      return set_csr(CSR_MSTATUS, (state.mstatus & ~mask) | (val & mask));
+      return set_csr(CSR_MSTATUS, (state.mstatus & ~mask) | (val & mask), 0);
     }
     case CSR_SIP:
       return set_csr(CSR_MIP,
-                     (state.mip & ~state.mideleg) | (val & state.mideleg));
+                     (state.mip & ~state.mideleg) | (val & state.mideleg), 0);
     case CSR_SIE:
       return set_csr(CSR_MIE,
-                     (state.mie & ~state.mideleg) | (val & state.mideleg));
-    case CSR_SEPC: state.sepc = val; break;
-    case CSR_STVEC: state.stvec = val >> 2 << 2; break;
+                     (state.mie & ~state.mideleg) | (val & state.mideleg), 0);
+    case CSR_SEPC: 
+       state.sepc = val; 
+       state.sepc_tag = tag;
+       break;
+    case CSR_STVEC: 
+       state.stvec = val >> 2 << 2; 
+       state.stvec_tag = val;
+       break;
     case CSR_SPTBR: state.sptbr = val; break;
-    case CSR_SSCRATCH: state.sscratch = val; break;
+    case CSR_SSCRATCH: 
+       state.sscratch = val; 
+       state.sscratch_tag = tag;
+       break;
     case CSR_SCAUSE: state.scause = val; break;
     case CSR_SBADADDR: state.sbadaddr = val; break;
-    case CSR_MEPC: state.mepc = val; break;
-    case CSR_MTVEC: state.mtvec = val >> 2 << 2; break;
-    case CSR_MSCRATCH: state.mscratch = val; break;
+    case CSR_MEPC: 
+       state.mepc = val; 
+       state.mepc_tag = tag;
+       break;
+    case CSR_MTVEC: 
+       state.mtvec = val >> 2 << 2; 
+       state.mtvec_tag = tag;
+       break;
+    case CSR_MSCRATCH:
+       state.mscratch = val; 
+       state.mscratch_tag = tag;
+       break;
     case CSR_MCAUSE: state.mcause = val; break;
     case CSR_MBADADDR: state.mbadaddr = val; break;
-    case CSR_MTAGCTRL:
-    case CSR_STAGCTRL:
-    case CSR_UTAGCTRL: state.tagctrl = val; break;
+    case CSR_MTAGCTRL: state.mtagctrl = val; break;
+    case CSR_STAGCTRL: state.stagctrl = val; break;
+    case CSR_UTAGCTRL: state.utagctrl = val; break;
   }
 }
 
-word_t processor_t::get_csr(int which)
+word_t processor_t::get_csr(int which, word_t *out_tag)
 {
+  *out_tag = 0;
   switch (which)
   {
     case CSR_FFLAGS:
@@ -380,13 +399,13 @@ word_t processor_t::get_csr(int which)
     case CSR_INSTRET:
     case CSR_CYCLE:
       if ((state.mucounteren >> (which & (xlen-1))) & 1)
-        return get_csr(which + (CSR_MCYCLE - CSR_CYCLE));
+         return get_csr(which + (CSR_MCYCLE - CSR_CYCLE), out_tag);
       break;
     case CSR_STIME:
     case CSR_SINSTRET:
     case CSR_SCYCLE:
       if ((state.mscounteren >> (which & (xlen-1))) & 1)
-        return get_csr(which + (CSR_MCYCLE - CSR_SCYCLE));
+         return get_csr(which + (CSR_MCYCLE - CSR_SCYCLE), out_tag);
       break;
     case CSR_MUCOUNTEREN: return state.mucounteren;
     case CSR_MSCOUNTEREN: return state.mscounteren;
@@ -417,21 +436,31 @@ word_t processor_t::get_csr(int which)
     }
     case CSR_SIP: return state.mip & state.mideleg;
     case CSR_SIE: return state.mie & state.mideleg;
-    case CSR_SEPC: return state.sepc;
+    case CSR_SEPC: 
+       *out_tag = state.sepc_tag;
+       return state.sepc;
     case CSR_SBADADDR: return state.sbadaddr;
-    case CSR_STVEC: return state.stvec;
+    case CSR_STVEC: 
+       *out_tag = state.stvec_tag; 
+       return state.stvec;
     case CSR_SCAUSE:
       if (max_xlen > xlen)
         return state.scause | ((state.scause >> (max_xlen-1)) << (xlen-1));
       return state.scause;
     case CSR_SPTBR: return state.sptbr;
     case CSR_SASID: return 0;
-    case CSR_SSCRATCH: return state.sscratch;
+    case CSR_SSCRATCH: 
+       *out_tag = state.sscratch_tag;
+       return state.sscratch;
     case CSR_MSTATUS: return state.mstatus;
     case CSR_MIP: return state.mip;
     case CSR_MIE: return state.mie;
-    case CSR_MEPC: return state.mepc;
-    case CSR_MSCRATCH: return state.mscratch;
+    case CSR_MEPC: 
+       *out_tag = state.mepc_tag;
+       return state.mepc;
+    case CSR_MSCRATCH: 
+       *out_tag = state.mscratch_tag;
+       return state.mscratch;
     case CSR_MCAUSE: return state.mcause;
     case CSR_MBADADDR: return state.mbadaddr;
     case CSR_MISA: return isa;
@@ -439,12 +468,14 @@ word_t processor_t::get_csr(int which)
     case CSR_MIMPID: return 0;
     case CSR_MVENDORID: return 0;
     case CSR_MHARTID: return id;
-    case CSR_MTVEC: return state.mtvec;
+    case CSR_MTVEC: 
+       *out_tag = state.mtvec_tag;
+       return state.mtvec;
     case CSR_MEDELEG: return state.medeleg;
     case CSR_MIDELEG: return state.mideleg;
-    case CSR_MTAGCTRL:
-    case CSR_STAGCTRL:
-    case CSR_UTAGCTRL: return state.tagctrl;
+    case CSR_MTAGCTRL: return state.mtagctrl;
+    case CSR_STAGCTRL: return state.stagctrl;
+    case CSR_UTAGCTRL: return state.utagctrl;
   }
   throw trap_illegal_instruction();
 }

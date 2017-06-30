@@ -50,7 +50,17 @@ EOF
 EOL="\\\\\n"
 
 BEFORE_TAG_ALU=$(cat <<'EOF'
-  word_t alu_check = get_field(STATE.tagctrl, TMASK_ALU_CHECK); \
+  word_t tagctrl; \
+  if (STATE.prv == PRV_U) { \
+    tagctrl = STATE.utagctrl; \
+  } \
+  else if (STATE.prv == PRV_S) { \
+    tagctrl = STATE.stagctrl; \
+  } \
+  else { \
+    tagctrl = STATE.mtagctrl; \
+  } \
+  word_t alu_check = get_field(tagctrl, TMASK_ALU_CHECK); \
   if (((arg1.data | arg2.data) & alu_check) != 0) { \
     throw trap_tag_check_failed(); \
   }
@@ -58,7 +68,7 @@ EOF
 )
 
 AFTER_TAG_ALU=$(cat <<'EOF'
-  word_t alu_prop = get_field(STATE.tagctrl, TMASK_ALU_PROP); \
+  word_t alu_prop = get_field(tagctrl, TMASK_ALU_PROP); \
   WRITE_RD_TAG((arg1.data | arg2.data) & alu_prop);
 EOF
 )
@@ -83,7 +93,17 @@ for INSN in $TAG_STORE_INSNS; do
   printf "#undef BEFORE_$INSN\n#undef AFTER_$INSN\n"
   printf "#define BEFORE_$INSN $EOL"
   cat <<'EOF'
-  word_t store_check = get_field(STATE.tagctrl, TMASK_STORE_CHECK); \
+  word_t tagctrl; \
+  if (STATE.prv == PRV_U) { \
+    tagctrl = STATE.utagctrl; \
+  } \
+  else if (STATE.prv == PRV_S) { \
+    tagctrl = STATE.stagctrl; \
+  } \
+  else { \
+    tagctrl = STATE.mtagctrl; \
+  } \
+  word_t store_check = get_field(tagctrl, TMASK_STORE_CHECK); \
   word_t mem_addr = RS1.data + insn.s_imm(); \
   word_t orig_tag = MMU.load_tag(mem_addr).data; \
   if ((orig_tag & store_check) != 0) { \
@@ -92,8 +112,9 @@ for INSN in $TAG_STORE_INSNS; do
 EOF
   printf "#define AFTER_$INSN $EOL"
   cat <<'EOF'
-  word_t store_prop = get_field(STATE.tagctrl, TMASK_STORE_PROP); \
-  word_t store_keep = get_field(STATE.tagctrl, TMASK_STORE_KEEP); \
+  word_t store_prop = get_field(tagctrl, TMASK_STORE_PROP); \
+  word_t store_keep = get_field(tagctrl, TMASK_STORE_KEEP); \
+  word_t tag = (RS2_TAG.data & store_prop) | (orig_tag & store_keep); \
   MMU.store_tag(mem_addr, (RS2_TAG.data & store_prop) | (orig_tag & store_keep));
 EOF
 done
@@ -103,7 +124,17 @@ for INSN in $TAG_LOAD_INSNS; do
   printf "#undef BEFORE_$INSN\n#undef AFTER_$INSN\n"
   printf "#define BEFORE_$INSN $EOL"
   cat <<'EOF'
-  word_t load_check = get_field(STATE.tagctrl, TMASK_LOAD_CHECK); \
+  word_t tagctrl; \
+  if (STATE.prv == PRV_U) { \
+    tagctrl = STATE.utagctrl; \
+  } \
+  else if (STATE.prv == PRV_S) { \
+    tagctrl = STATE.stagctrl; \
+  } \
+  else { \
+    tagctrl = STATE.mtagctrl; \
+  } \
+  word_t load_check = get_field(tagctrl, TMASK_LOAD_CHECK); \
   word_t mem_addr = RS1.data + insn.i_imm(); \
   if ((MMU.load_tag(mem_addr).data & load_check) != 0) { \
     throw trap_mem_tag_exception(mem_addr); \
@@ -111,8 +142,9 @@ for INSN in $TAG_LOAD_INSNS; do
 EOF
   printf "#define AFTER_$INSN $EOL"
   cat <<'EOF'
-  word_t load_prop = get_field(STATE.tagctrl, TMASK_LOAD_PROP); \
+  word_t load_prop = get_field(tagctrl, TMASK_LOAD_PROP); \
   reg_t mem_tag = MMU.load_tag(mem_addr); \
+  word_t tag = mem_tag.data & load_prop; \
   WRITE_RD_TAG(mem_tag.data & load_prop);
 EOF
 done

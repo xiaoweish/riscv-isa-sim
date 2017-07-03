@@ -369,7 +369,15 @@ void processor_t::set_csr(int which, word_t val, word_t tag)
        break;
     case CSR_MCAUSE: state.mcause = val; break;
     case CSR_MBADADDR: state.mbadaddr = val; break;
+    case CSR_MTAGCTRL_SCRATCH:
+       state.mtagctrl_scratch = val;
+       state.mtagctrl_scratch_tag = tag;
+       break;
     case CSR_MTAGCTRL: state.mtagctrl = val; break;
+    case CSR_STAGCTRL_SCRATCH: 
+       state.stagctrl_scratch = val;
+       state.stagctrl_scratch_tag = tag;
+       break;
     case CSR_STAGCTRL: state.stagctrl = val; break;
     case CSR_UTAGCTRL: state.utagctrl = val; break;
   }
@@ -473,7 +481,13 @@ word_t processor_t::get_csr(int which, word_t *out_tag)
        return state.mtvec;
     case CSR_MEDELEG: return state.medeleg;
     case CSR_MIDELEG: return state.mideleg;
+    case CSR_MTAGCTRL_SCRATCH:
+       *out_tag = state.mtagctrl_scratch_tag;
+       return state.mtagctrl_scratch;
     case CSR_MTAGCTRL: return state.mtagctrl;
+    case CSR_STAGCTRL_SCRATCH: 
+       *out_tag = state.stagctrl_scratch_tag;
+       return state.stagctrl_scratch;
     case CSR_STAGCTRL: return state.stagctrl;
     case CSR_UTAGCTRL: return state.utagctrl;
   }

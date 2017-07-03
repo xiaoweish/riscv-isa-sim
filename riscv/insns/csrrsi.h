@@ -10,6 +10,8 @@ switch (csr) {
    case CSR_SEPC:
    case CSR_SSCRATCH:
    case CSR_STVEC:
+   case CSR_STAGCTRL_SCRATCH:
+   case CSR_MTAGCTRL_SCRATCH:
       WRITE_RD_TAG(old_tag);
       break;
    default:

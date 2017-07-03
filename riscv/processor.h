@@ -69,11 +69,11 @@ struct state_t
   word_t sptbr;
   word_t scause;
   word_t mtagctrl;
-  word_t mtagcntl_scratch;
-  word_t mtagcntl_scratch_tag;
-  word_t stagctrl;
+  word_t mtagctrl_scratch;
+  word_t mtagctrl_scratch_tag;
   word_t stagctrl_scratch;
   word_t stagctrl_scratch_tag;
+  word_t stagctrl;
   word_t utagctrl;
   uint32_t fflags;
   uint32_t frm;

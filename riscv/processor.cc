@@ -346,7 +346,7 @@ void processor_t::set_csr(int which, word_t val, word_t tag)
        break;
     case CSR_STVEC: 
        state.stvec = val >> 2 << 2; 
-       state.stvec_tag = val;
+       state.stvec_tag = tag;
        break;
     case CSR_SPTBR: state.sptbr = val; break;
     case CSR_SSCRATCH: 

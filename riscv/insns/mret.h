@@ -1,5 +1,5 @@
 require_privilege(PRV_M);
-set_pc_and_serialize(p->get_state()->mepc);
+set_pc_and_serialize(p->get_state()->mepc, p->get_state()->mepc_tag);
 word_t s = STATE.mstatus;
 word_t prev_prv = get_field(s, MSTATUS_MPP);
 s = set_field(s, MSTATUS_UIE << prev_prv, get_field(s, MSTATUS_MPIE));

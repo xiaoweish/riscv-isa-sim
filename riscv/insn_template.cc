@@ -5,7 +5,7 @@
 reg_t rv32_NAME(processor_t* p, insn_t insn, reg_t pc)
 {
   int xlen = 32;
-  reg_t npc = reg_t(sext_xlen(pc.data + insn_length(OPCODE)), pc.tag);
+  reg_t npc = reg_t(sext_xlen(pc.data + insn_length(OPCODE)), 0);
   BEFORE_NAME;
   #include "insns/NAME.h"
   AFTER_NAME;
@@ -16,7 +16,7 @@ reg_t rv32_NAME(processor_t* p, insn_t insn, reg_t pc)
 reg_t rv64_NAME(processor_t* p, insn_t insn, reg_t pc)
 {
   int xlen = 64;
-  reg_t npc = reg_t(sext_xlen(pc.data + insn_length(OPCODE)), pc.tag);
+  reg_t npc = reg_t(sext_xlen(pc.data + insn_length(OPCODE)), 0);
   BEFORE_NAME;
   #include "insns/NAME.h"
   AFTER_NAME;

@@ -243,10 +243,10 @@ private:
        npc = reg_t(sext_xlen(x));                      \
      } while(0)
 
-#define set_pc_and_serialize(x) \
+#define set_pc_and_serialize(x, tag)        \
   do { set_pc(x); /* check alignment */ \
        npc = reg_t(PC_SERIALIZE_AFTER); \
-       STATE.pc = reg_t(x); \
+       STATE.pc = reg_t(x, tag);            \
      } while(0)
 
 /* Sentinel PC values to serialize simulator pipeline */
@@ -266,5 +266,16 @@ private:
   if (((write) && csr_read_only) || STATE.prv < csr_priv) \
     throw trap_illegal_instruction(); \
   (which); })
+
+#define get_tagctrl(tagctrl) \
+   if (STATE.prv == PRV_U) { \
+      tagctrl = STATE.utagctrl; \
+   } \
+   else if (STATE.prv == PRV_S) { \
+      tagctrl = STATE.stagctrl; \
+   } \
+   else { \
+      tagctrl = STATE.mtagctrl; \
+   } 
 
 #endif

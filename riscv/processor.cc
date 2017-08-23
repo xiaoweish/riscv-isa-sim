@@ -199,9 +199,10 @@ void processor_t::set_privilege(word_t prv)
 
 void processor_t::take_trap(trap_t& t, reg_t epc)
 {
-  if (debug)
-    fprintf(stderr, "core %3d: exception %s, epc 0x%016" PRIx64 "\n",
-            id, t.name(), epc.data);
+   if (debug) {
+      fprintf(stderr, "core %3d: exception %s, epc 0x%016" PRIx64 "\n",
+              id, t.name(), epc.data);
+   }
 
   // by default, trap to M-mode, unless delegated to S-mode
   word_t bit = t.cause();
@@ -213,8 +214,10 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
     state.pc = state.stvec;
     state.scause = t.cause();
     state.sepc = epc.data;
-    if (t.has_badaddr())
-      state.sbadaddr = t.get_badaddr();
+    state.sepc_tag = epc.tag;
+    if (t.has_badaddr()) {
+       state.sbadaddr = t.get_badaddr();
+    }
 
     word_t s = state.mstatus;
     s = set_field(s, MSTATUS_SPIE, get_field(s, MSTATUS_UIE << state.prv));
@@ -226,6 +229,7 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
     state.pc = state.mtvec;
     state.mcause = t.cause();
     state.mepc = epc.data;
+    state.mepc_tag = epc.tag;
     if (t.has_badaddr())
       state.mbadaddr = t.get_badaddr();
 

@@ -81,8 +81,17 @@ void processor_t::step(size_t n)
         while (instret < n)
         {
           insn_fetch_t fetch = mmu->load_insn(pc.data);
+          word_t insn_tag;
           if (!state.serialized)
             disasm(fetch.insn);
+          insn_tag = (mmu->fetch_tag(pc.data)).data;
+          if ((pc.tag & insn_tag) != pc.tag) {
+               // a bit of weirdness since the pc.tag isn't the actual pc branch
+               // it's the expected tag, so set it to be the actual tag before throwing
+               // exception
+               pc.tag = insn_tag;
+               throw trap_mem_tag_exception(pc.data);
+          }
           pc = execute_insn(this, pc, fetch);
           advance_pc();
         }
@@ -94,7 +103,12 @@ void processor_t::step(size_t n)
 
         #define ICACHE_ACCESS(i) { \
           insn_fetch_t fetch = ic_entry->data; \
+          word_t insn_tag = (mmu->fetch_tag(pc.data)).data; \
           ic_entry++; \
+          if ((pc.tag & insn_tag) != pc.tag)  { \
+             pc.tag = insn_tag; \
+             throw trap_mem_tag_exception(pc.data); \
+          } \
           pc = execute_insn(this, pc, fetch); \
           if (i == mmu_t::ICACHE_ENTRIES-1) break; \
           if (unlikely(ic_entry->tag != pc.data)) goto miss; \

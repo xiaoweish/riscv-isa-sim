@@ -72,10 +72,29 @@ public:
     // word-aligned value.
     addr = addr & ~(sizeof(word_t)-1);
     word_t vpn = addr >> PGSHIFT;
-    if (likely(tlb_load_tag[vpn % TLB_ENTRIES] == vpn))
+    if (likely(tlb_load_tag[vpn % TLB_ENTRIES] == vpn)) {
       tag = read_tag(sim->mem_to_addr(tlb_data[vpn % TLB_ENTRIES] + addr));
-    else
+    }
+    else {
       load_slow_path(addr, 0, NULL, &tag);
+    }
+    return reg_t(tag);
+  }
+
+  reg_t fetch_tag(word_t addr) __attribute__((always_inline)) {
+      uint64_t tag;
+    // A tag load of an unaligned address always accesses the tag for the
+    // word-aligned value.
+    addr = addr & ~(sizeof(word_t)-1);
+    word_t vpn = addr >> PGSHIFT;
+    if (likely(tlb_load_tag[vpn % TLB_ENTRIES] == vpn)) {
+      tag = read_tag(sim->mem_to_addr(tlb_data[vpn % TLB_ENTRIES] + addr));
+    }
+    else {
+       const uint16_t* iaddr = translate_insn_addr(addr);
+       word_t paddr = sim->mem_to_addr((char*)iaddr);
+       tag = read_tag(paddr);
+    }
     return reg_t(tag);
   }
 

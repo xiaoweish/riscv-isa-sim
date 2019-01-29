@@ -7,3 +7,5 @@ else if(lhs == INT64_MIN && rhs == -1)
   WRITE_RD(lhs);
 else
   WRITE_RD(sext_xlen(lhs / rhs));
+
+STATE.mcycle += INST_DIV_CYCLES-1;

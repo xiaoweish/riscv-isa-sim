@@ -5,3 +5,5 @@ if(rhs == 0)
   WRITE_RD(UINT64_MAX);
 else
   WRITE_RD(sext_xlen(lhs / rhs));
+
+STATE.mcycle += INST_DIVU_CYCLES-1;

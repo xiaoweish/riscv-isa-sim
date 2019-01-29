@@ -220,6 +220,7 @@ struct state_t
   reg_t mtvec;
   reg_t mcause;
   reg_t minstret;
+  reg_t mcycle;
   reg_t mie;
   reg_t mip;
   reg_t medeleg;

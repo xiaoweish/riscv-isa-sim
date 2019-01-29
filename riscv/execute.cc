@@ -248,6 +248,7 @@ void processor_t::step(size_t n)
     }
 
     state.minstret += instret;
+    state.mcycle += instret;
     n -= instret;
   }
 }

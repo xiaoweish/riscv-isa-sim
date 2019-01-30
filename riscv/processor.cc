@@ -21,9 +21,10 @@
 #define STATE state
 
 processor_t::processor_t(const char* isa, const char* varch, simif_t* sim,
-                         uint32_t id, bool halt_on_reset)
-  : debug(false), halt_request(false), sim(sim), ext(NULL), id(id),
-  halt_on_reset(halt_on_reset), last_pc(1), executions(1)
+                         cycle_info_t* cycle_info, uint32_t id,
+                         bool halt_on_reset)
+  : debug(false), halt_request(false), sim(sim), ext(NULL),
+  cycle_info(cycle_info), id(id), halt_on_reset(halt_on_reset), last_pc(1), executions(1)
 {
   VU.p = this;
   parse_isa_string(isa);
@@ -740,15 +741,15 @@ reg_t processor_t::get_csr(int which)
       break;
     case CSR_CYCLE:
       if (ctr_ok)
-        return state.mcycle;
+        return state.mcycle + cycle_info->num_cycles();
       break;
     case CSR_MINSTRET:
       return state.minstret;
     case CSR_MCYCLE:
-      return state.mcycle;
+      return state.mcycle + cycle_info->num_cycles();
     case CSR_CYCLEH:
       if (ctr_ok && xlen == 32)
-        return state.mcycle >> 32;
+        return (state.mcycle + cycle_info->num_cycles()) >> 32;
       break;
     case CSR_INSTRETH:
       if (ctr_ok && xlen == 32)
@@ -756,7 +757,7 @@ reg_t processor_t::get_csr(int which)
       break;
     case CSR_MCYCLEH:
       if (xlen == 32)
-        return state.mcycle >> 32;
+        return (state.mcycle + cycle_info->num_cycles()) >> 32;
       break;
     case CSR_MINSTRETH:
       if (xlen == 32)

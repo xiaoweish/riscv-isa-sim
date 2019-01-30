@@ -31,6 +31,9 @@ class cache_sim_t
   void set_miss_handler(cache_sim_t* mh) { miss_handler = mh; }
   void set_log(bool _log) { log = _log; }
 
+  uint64_t get_read_misses() { return read_misses; };
+  uint64_t get_write_misses() { return write_misses; };
+
   static cache_sim_t* construct(const char* config, const char* name);
 
  protected:
@@ -94,6 +97,14 @@ class cache_memtracer_t : public memtracer_t
   {
     cache->set_log(log);
   }
+  uint64_t get_read_misses()
+  {
+    return cache->get_read_misses();
+  };
+  uint64_t get_write_misses()
+  {
+    return cache->get_write_misses();
+  };
 
  protected:
   cache_sim_t* cache;

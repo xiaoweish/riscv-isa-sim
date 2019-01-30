@@ -93,6 +93,35 @@ static std::vector<std::pair<reg_t, mem_t*>> make_mems(const char* arg)
   return res;
 }
 
+struct cache_hierarchy_t : cycle_info_t
+{
+  std::unique_ptr<icache_sim_t> ic;
+  std::unique_ptr<dcache_sim_t> dc;
+  std::unique_ptr<cache_sim_t> l2;
+
+  uint64_t num_cycles()
+  {
+    uint64_t d = 0;
+    uint64_t i = 0;
+
+    if(dc)
+    {
+      auto rm = dc->get_read_misses();
+      auto wm = dc->get_write_misses();
+      d = (rm + rm)*10;
+    }
+
+    if(ic)
+    {
+      auto rm = ic->get_read_misses();
+      auto wm = ic->get_write_misses();
+      i = (rm + rm)*10;
+    }
+
+    return d+i;
+  }
+};
+
 int main(int argc, char** argv)
 {
   bool debug = false;
@@ -104,9 +133,7 @@ int main(int argc, char** argv)
   size_t nprocs = 1;
   reg_t start_pc = reg_t(-1);
   std::vector<std::pair<reg_t, mem_t*>> mems;
-  std::unique_ptr<icache_sim_t> ic;
-  std::unique_ptr<dcache_sim_t> dc;
-  std::unique_ptr<cache_sim_t> l2;
+  cache_hierarchy_t ch;
   bool log_cache = false;
   std::function<extension_t*()> extension;
   const char* isa = DEFAULT_ISA;
@@ -150,9 +177,9 @@ int main(int argc, char** argv)
   parser.option(0, "rbb-port", 1, [&](const char* s){use_rbb = true; rbb_port = atoi(s);});
   parser.option(0, "pc", 1, [&](const char* s){start_pc = strtoull(s, 0, 0);});
   parser.option(0, "hartids", 1, hartids_parser);
-  parser.option(0, "ic", 1, [&](const char* s){ic.reset(new icache_sim_t(s));});
-  parser.option(0, "dc", 1, [&](const char* s){dc.reset(new dcache_sim_t(s));});
-  parser.option(0, "l2", 1, [&](const char* s){l2.reset(cache_sim_t::construct(s, "L2$"));});
+  parser.option(0, "ic", 1, [&](const char* s){ch.ic.reset(new icache_sim_t(s));});
+  parser.option(0, "dc", 1, [&](const char* s){ch.dc.reset(new dcache_sim_t(s));});
+  parser.option(0, "l2", 1, [&](const char* s){ch.l2.reset(cache_sim_t::construct(s, "L2$"));});
   parser.option(0, "log-cache-miss", 0, [&](const char* s){log_cache = true;});
   parser.option(0, "isa", 1, [&](const char* s){isa = s;});
   parser.option(0, "varch", 1, [&](const char* s){varch = s;});
@@ -192,7 +219,7 @@ int main(int argc, char** argv)
     help();
 
   sim_t s(isa, varch, nprocs, halted, start_pc, mems, htif_args, std::move(hartids),
-      dm_config);
+      dm_config, &ch);
   std::unique_ptr<remote_bitbang_t> remote_bitbang((remote_bitbang_t *) NULL);
   std::unique_ptr<jtag_dtm_t> jtag_dtm(
       new jtag_dtm_t(&s.debug_module, dmi_rti));
@@ -207,14 +234,14 @@ int main(int argc, char** argv)
     return 0;
   }
 
-  if (ic && l2) ic->set_miss_handler(&*l2);
-  if (dc && l2) dc->set_miss_handler(&*l2);
-  if (ic) ic->set_log(log_cache);
-  if (dc) dc->set_log(log_cache);
+  if (ch.ic && ch.l2) ch.ic->set_miss_handler(&*ch.l2);
+  if (ch.dc && ch.l2) ch.dc->set_miss_handler(&*ch.l2);
+  if (ch.ic) ch.ic->set_log(log_cache);
+  if (ch.dc) ch.dc->set_log(log_cache);
   for (size_t i = 0; i < nprocs; i++)
   {
-    if (ic) s.get_core(i)->get_mmu()->register_memtracer(&*ic);
-    if (dc) s.get_core(i)->get_mmu()->register_memtracer(&*dc);
+    if (ch.ic) s.get_core(i)->get_mmu()->register_memtracer(&*ch.ic);
+    if (ch.dc) s.get_core(i)->get_mmu()->register_memtracer(&*ch.dc);
     if (extension) s.get_core(i)->register_extension(extension());
   }
 

@@ -76,4 +76,9 @@ class clint_t : public abstract_device_t {
   std::vector<mtimecmp_t> mtimecmp;
 };
 
+class cycle_info_t {
+public:
+    virtual uint64_t num_cycles() = 0;
+};
+
 #endif

@@ -285,8 +285,8 @@ static int cto(reg_t val)
 class processor_t : public abstract_device_t
 {
 public:
-  processor_t(const char* isa, const char* varch, simif_t* sim, uint32_t id,
-              bool halt_on_reset=false);
+  processor_t(const char* isa, const char* varch, simif_t* sim,
+              cycle_info_t* cycle_info, uint32_t id, bool halt_on_reset=false);
   ~processor_t();
 
   void set_debug(bool value);
@@ -423,6 +423,7 @@ private:
   mmu_t* mmu; // main memory is always accessed via the mmu
   extension_t* ext;
   disassembler_t* disassembler;
+  cycle_info_t* cycle_info;
   state_t state;
   uint32_t id;
   unsigned max_xlen;

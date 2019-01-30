@@ -24,7 +24,7 @@ public:
   sim_t(const char* isa, const char* varch, size_t _nprocs, bool halted,
         reg_t start_pc, std::vector<std::pair<reg_t, mem_t*>> mems,
         const std::vector<std::string>& args, const std::vector<int> hartids,
-        const debug_module_config_t &dm_config);
+        const debug_module_config_t &dm_config, cycle_info_t* cycle_info);
   ~sim_t();
 
   // run the simulation to completion

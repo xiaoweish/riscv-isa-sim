@@ -28,7 +28,7 @@ sim_t::sim_t(const char* isa, const char* varch, size_t nprocs, bool halted,
              reg_t start_pc, std::vector<std::pair<reg_t, mem_t*>> mems,
              const std::vector<std::string>& args,
              std::vector<int> const hartids,
-             const debug_module_config_t &dm_config)
+             const debug_module_config_t &dm_config, cycle_info_t* cycle_info)
   : htif_t(args), mems(mems), procs(std::max(nprocs, size_t(1))),
     start_pc(start_pc), current_step(0), current_proc(0), debug(false),
     histogram_enabled(false), dtb_enabled(true), remote_bitbang(NULL),
@@ -45,7 +45,7 @@ sim_t::sim_t(const char* isa, const char* varch, size_t nprocs, bool halted,
 
   if (hartids.size() == 0) {
     for (size_t i = 0; i < procs.size(); i++) {
-      procs[i] = new processor_t(isa, varch, this, i, halted);
+      procs[i] = new processor_t(isa, varch, this, cycle_info, i, halted);
     }
   }
   else {
@@ -54,7 +54,7 @@ sim_t::sim_t(const char* isa, const char* varch, size_t nprocs, bool halted,
       exit(1);
     }
     for (size_t i = 0; i < procs.size(); i++) {
-      procs[i] = new processor_t(isa, varch, this, hartids[i], halted);
+      procs[i] = new processor_t(isa, varch, this, cycle_info, hartids[i], halted);
     }
   }
 

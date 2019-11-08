@@ -348,6 +348,9 @@ riscv_insn_ext_b = \
 	minu \
 	orn \
 	pack \
+	packh \
+	packu \
+	packuw \
 	packw \
 	pcnt \
 	pcntw \
@@ -372,6 +375,8 @@ riscv_insn_ext_b = \
 	sbseti \
 	sbsetiw \
 	sbsetw \
+	sext_b \
+	sext_h \
 	shfl \
 	shfli \
 	shflw \

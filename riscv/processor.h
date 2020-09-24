@@ -212,6 +212,9 @@ struct state_t
   reg_t tdata2[num_triggers];
   bool debug_mode;
 
+  // Ibex-specific CSRs
+  reg_t cpuctrl;
+
   static const int max_pmp = 16;
   pmpaddr_csr_t_p pmpaddr[max_pmp];
 
@@ -288,7 +291,9 @@ class processor_t : public abstract_device_t
 public:
   processor_t(const char* isa, const char* priv, const char* varch,
               simif_t* sim, uint32_t id, bool halt_on_reset,
-              FILE *log_file, ostream *sout_ptr); // because of command line option --log and -s we need both
+              FILE *log_file, ostream *sout_ptr, bool secure_ibex,
+              bool icache_en); // because of command line option --log and -s we
+                               // need both log_file and sout_ptr
   ~processor_t();
 
   void set_debug(bool value);
@@ -480,6 +485,8 @@ private:
   FILE *log_file;
   ostream *sout_ptr; // needed for socket command interface -s, also used for -d and -l, but not for --log
   bool halt_on_reset;
+  bool secure_ibex;
+  bool icache_en;
   std::vector<bool> extension_table;
   std::vector<bool> impl_table;
 

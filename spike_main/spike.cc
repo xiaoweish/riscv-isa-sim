@@ -73,6 +73,8 @@ static void help(int exit_code = 1)
   fprintf(stderr, "  --dm-no-abstract-csr  Debug module won't support abstract to authenticate\n");
   fprintf(stderr, "  --dm-no-halt-groups   Debug module won't support halt groups\n");
   fprintf(stderr, "  --dm-no-impebreak     Debug module won't support implicit ebreak in program buffer\n");
+  fprintf(stderr, "  --secure-ibex         SecureIbex mode is enabled\n");
+  fprintf(stderr, "  --icache-en           Ibex instruction cache is enabled\n");
 
   exit(exit_code);
 }
@@ -253,6 +255,8 @@ int main(int argc, char** argv)
     .support_impebreak = true
   };
   std::vector<int> hartids;
+  bool secure_ibex = false;
+  bool icache_en = false;
 
   auto const hartids_parser = [&](const char *s) {
     std::string const str(s);
@@ -370,6 +374,8 @@ int main(int argc, char** argv)
                 [&](const char* s){log_commits = true;});
   parser.option(0, "log", 1,
                 [&](const char* s){log_path = s;});
+  parser.option(0, "secure-ibex", 0, [&](const char* s){secure_ibex = true;});
+  parser.option(0, "icache-en", 0, [&](const char* s){icache_en = true;});
 
   auto argv1 = parser.parse(argv);
   std::vector<std::string> htif_args(argv1, (const char*const*)argv + argc);
@@ -429,7 +435,8 @@ int main(int argc, char** argv)
 
   sim_t s(isa, priv, varch, nprocs, halted, real_time_clint,
       initrd_start, initrd_end, bootargs, start_pc, mems, plugin_devices, htif_args,
-      std::move(hartids), dm_config, log_path, dtb_enabled, dtb_file
+      std::move(hartids), dm_config, log_path, dtb_enabled, dtb_file,
+      secure_ibex, icache_en
 #ifdef HAVE_BOOST_ASIO
       , io_service_ptr, acceptor_ptr
 #endif

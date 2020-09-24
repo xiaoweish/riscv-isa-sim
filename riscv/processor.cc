@@ -22,11 +22,11 @@
 
 processor_t::processor_t(const char* isa, const char* priv, const char* varch,
                          simif_t* sim, uint32_t id, bool halt_on_reset,
-                         FILE* log_file)
+                         FILE* log_file, bool secure_ibex, bool icache_en)
   : debug(false), halt_request(HR_NONE), sim(sim), ext(NULL), id(id), xlen(0),
   histogram_enabled(false), log_commits_enabled(false),
-  log_file(log_file), halt_on_reset(halt_on_reset),
-  extension_table(256, false), last_pc(1), executions(1)
+  log_file(log_file), halt_on_reset(halt_on_reset), secure_ibex(secure_ibex),
+  icache_en(icache_en), extension_table(256, false), last_pc(1), executions(1)
 {
   VU.p = this;
 
@@ -921,6 +921,14 @@ void processor_t::set_csr(int which, reg_t val)
       dirty_vs_state;
       VU.vxrm = val & 0x3ul;
       break;
+    case CSR_CPUCTRL:
+      // As per the Ibex spec, only the bottom 6 bits of cpuctrl are accessible.
+      state.cpuctrl = val & 0x3f;
+      break;
+    case CSR_SECURESEED:
+      // As per Ibex spec, writes to this CSR aren't actually stored anywhere,
+      // but are just a trigger to update seeding of RNGs inside the design.
+      break;
   }
 }
 
@@ -1145,6 +1153,13 @@ reg_t processor_t::get_csr(int which)
       if (!supports_extension('V'))
         break;
       return VU.vlenb;
+    case CSR_CPUCTRL:
+      // cpuctrl[0] will read 0 unless Icache param in Ibex is set.
+      // cpuctrl[5:1] will read 0 unless SecureIbex param in Ibex is set.
+      return (secure_ibex ? state.cpuctrl & reg_t(0x3e) : reg_t(0)) |
+             (icache_en   ? state.cpuctrl & reg_t(0x1)  : reg_t(0));
+    case CSR_SECURESEED:
+      return (reg_t)0;
   }
   throw trap_illegal_instruction(0);
 }

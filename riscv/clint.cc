@@ -81,9 +81,28 @@ void clint_t::increment(reg_t inc)
   } else {
     mtime += inc;
   }
-  for (size_t i = 0; i < procs.size(); i++) {
-    procs[i]->state.mip &= ~MIP_MTIP;
-    if (mtime >= mtimecmp[i])
-      procs[i]->state.mip |= MIP_MTIP;
-  }
+
+  /*
+   * The below section of code raises pending timer interrupts every 5000
+   * instructions based on the comparison (mtime >= mtimecmp) as per the RISC-V
+   * spec.
+   *
+   * This is entirely unnecessary for Ibex as we do not implement the timer
+   * CSRs, and in fact expect timer interrupts to be routed from an external
+   * device.
+   *
+   * As a result, enabling this section of code results in comparison errors
+   * when timer interrupts are enabled as Spike will natively trap into the
+   * timer interrupt handler, but Ibex will not see any interrupt so it will
+   * keep on executing.
+   *
+   * We comment out this section of code to resolve this issue - this should not
+   * cause any other functional issues in Spike.
+   *
+   * for (size_t i = 0; i < procs.size(); i++) {
+   *   procs[i]->state.mip &= ~MIP_MTIP;
+   *   if (mtime >= mtimecmp[i])
+   *     procs[i]->state.mip |= MIP_MTIP;
+   * }
+   */
 }

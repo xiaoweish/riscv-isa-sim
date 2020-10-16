@@ -193,6 +193,9 @@ struct state_t
   reg_t tdata2[num_triggers];
   bool debug_mode;
 
+  // Ibex-specific CSRs
+  reg_t cpuctrl;
+
   static const int max_pmp = 16;
   uint8_t pmpcfg[max_pmp];
   reg_t pmpaddr[max_pmp];
@@ -249,7 +252,7 @@ class processor_t : public abstract_device_t
 public:
   processor_t(const char* isa, const char* priv, const char* varch,
               simif_t* sim, uint32_t id, bool halt_on_reset,
-              FILE *log_file);
+              FILE *log_file, bool secure_ibex, bool icache_en);
   ~processor_t();
 
   void set_debug(bool value);
@@ -411,8 +414,10 @@ private:
   bool log_commits_enabled;
   FILE *log_file;
   bool halt_on_reset;
+  bool secure_ibex;
+  bool icache_en;
   std::vector<bool> extension_table;
-  
+
 
   std::vector<insn_desc_t> instructions;
   std::map<reg_t,uint64_t> pc_histogram;

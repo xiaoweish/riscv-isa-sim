@@ -35,7 +35,8 @@ sim_t::sim_t(const char* isa, const char* priv, const char* varch,
              std::vector<int> const hartids,
              const debug_module_config_t &dm_config,
              const char *log_path,
-             bool dtb_enabled, const char *dtb_file)
+             bool dtb_enabled, const char *dtb_file,
+             bool secure_ibex, bool icache_en)
   : htif_t(args),
     mems(mems),
     plugin_devices(plugin_devices),
@@ -77,7 +78,7 @@ sim_t::sim_t(const char* isa, const char* priv, const char* varch,
   for (size_t i = 0; i < nprocs; i++) {
     int hart_id = hartids.empty() ? i : hartids[i];
     procs[i] = new processor_t(isa, priv, varch, this, hart_id, halted,
-                               log_file.get());
+                               log_file.get(), secure_ibex, icache_en);
   }
 
   make_dtb();

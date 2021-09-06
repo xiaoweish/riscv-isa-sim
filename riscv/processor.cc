@@ -629,6 +629,8 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
 
   serialized = false;
 
+  nmi = false;
+
 #ifdef RISCV_ENABLE_COMMITLOG
   log_reg_write.clear();
   log_mem_read.clear();

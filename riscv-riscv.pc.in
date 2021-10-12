@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@prefix@
+libdir=${prefix}/@libdir@
+includedir=${prefix}/@includedir@
+
+Name: riscv-riscv
+Description: RISC-V ISS
+Version: git
+Libs: -Wl,-rpath,${libdir} -L${libdir} -lriscv
+Cflags: -I${includedir}

@@ -32,8 +32,15 @@ riscv_hdrs = \
 	remote_bitbang.h \
 	jtag_dtm.h \
 	csrs.h \
+	log_file.h \
+	entropy_source.h \
+	platform.h
 
-riscv_install_hdrs = mmio_plugin.h
+riscv_install_hdrs = $(riscv_hdrs)
+
+riscv_install_lib = yes
+
+riscv_install_config_hdr = yes
 
 riscv_precompiled_hdrs = \
 	insn_template.h \

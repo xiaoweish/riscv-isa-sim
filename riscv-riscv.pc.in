@@ -6,5 +6,5 @@ includedir=@includedir@
 Name: riscv-riscv
 Description: RISC-V ISS
 Version: git
-Libs: -Wl,-rpath,${libdir} -L${libdir} -lriscv
-Cflags: -I${includedir}
+Libs: -Wl,-rpath,${libdir} -L${libdir} -lriscv -lsoftfloat -ldl
+Cflags: -I${includedir} -I${includedir}/softfloat

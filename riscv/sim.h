@@ -42,6 +42,7 @@ public:
 #ifdef HAVE_BOOST_ASIO
         boost::asio::io_service *io_service_ptr_ctor, boost::asio::ip::tcp::acceptor *acceptor_ptr_ctor,  // option -s
 #endif
+        bool secure_ibex, bool icache_en,
         FILE *cmd_file); // needed for command line option --cmd
   ~sim_t();
 
@@ -115,7 +116,7 @@ private:
   char* addr_to_mem(reg_t addr);
   bool mmio_load(reg_t addr, size_t len, uint8_t* bytes);
   bool mmio_store(reg_t addr, size_t len, const uint8_t* bytes);
-  void make_dtb();
+  void make_dtb(bool secure_ibex, bool icache_en);
   void set_rom();
 
   const char* get_symbol(uint64_t addr);

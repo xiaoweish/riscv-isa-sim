@@ -15,7 +15,8 @@ std::string make_dts(size_t insns_per_rtc_tick, size_t cpu_hz,
                      reg_t initrd_start, reg_t initrd_end,
                      const char* bootargs,
                      std::vector<processor_t*> procs,
-                     std::vector<std::pair<reg_t, mem_t*>> mems)
+                     std::vector<std::pair<reg_t, mem_t*>> mems,
+                     bool secure_ibex, bool icache_en)
 {
   std::stringstream s;
   s << std::dec <<
@@ -60,6 +61,8 @@ std::string make_dts(size_t insns_per_rtc_tick, size_t cpu_hz,
          "      riscv,pmpregions = <16>;\n"
          "      riscv,pmpgranularity = <4>;\n"
          "      clock-frequency = <" << cpu_hz << ">;\n"
+         "      ibex,secure-ibex = <" << secure_ibex << ">;\n"
+         "      ibex,icache-en = <" << icache_en << ">;\n"
          "      CPU" << i << "_intc: interrupt-controller {\n"
          "        #address-cells = <2>;\n"
          "        #interrupt-cells = <1>;\n"

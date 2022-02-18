@@ -41,6 +41,7 @@ sim_t::sim_t(const char* isa, const char* priv, const char* varch,
 #ifdef HAVE_BOOST_ASIO
              boost::asio::io_service *io_service_ptr, boost::asio::ip::tcp::acceptor *acceptor_ptr, // option -s
 #endif
+             bool secure_ibex, bool icache_en,
              FILE *cmd_file) // needed for command line option --cmd
   : htif_t(args),
     mems(mems),
@@ -93,9 +94,10 @@ sim_t::sim_t(const char* isa, const char* priv, const char* varch,
     int hart_id = hartids.empty() ? i : hartids[i];
     procs[i] = new processor_t(isa, priv, varch, this, hart_id, halted,
                                log_file.get(), sout_);
+    procs[i]->set_ibex_flags(secure_ibex, icache_en);
   }
 
-  make_dtb();
+  make_dtb(secure_ibex, icache_en);
 
   void *fdt = (void *)dtb.c_str();
 
@@ -297,7 +299,7 @@ bool sim_t::mmio_store(reg_t addr, size_t len, const uint8_t* bytes)
   return bus.store(addr, len, bytes);
 }
 
-void sim_t::make_dtb()
+void sim_t::make_dtb(bool secure_ibex, bool icache_en)
 {
   if (!dtb_file.empty()) {
     std::ifstream fin(dtb_file.c_str(), std::ios::binary);
@@ -311,7 +313,8 @@ void sim_t::make_dtb()
 
     dtb = strstream.str();
   } else {
-    dts = make_dts(INSNS_PER_RTC_TICK, CPU_HZ, initrd_start, initrd_end, bootargs, procs, mems);
+    dts = make_dts(INSNS_PER_RTC_TICK, CPU_HZ, initrd_start, initrd_end, bootargs, procs, mems,
+                   secure_ibex, icache_en);
     dtb = dts_compile(dts);
   }
 

@@ -507,8 +507,12 @@ public:
   void set_pmp_num(reg_t pmp_num);
   void set_pmp_granularity(reg_t pmp_granularity);
   void set_mmu_capability(int cap);
+  void set_ibex_flags(bool secure_ibex, bool icache_en);
 
   const char* get_symbol(uint64_t addr);
+
+  bool get_secure_ibex() const { return secure_ibex; }
+  bool get_icache_en() const { return icache_en; }
 
 private:
   simif_t* sim;
@@ -523,6 +527,8 @@ private:
   FILE *log_file;
   std::ostream sout_; // needed for socket command interface -s, also used for -d and -l, but not for --log
   bool halt_on_reset;
+  bool secure_ibex;
+  bool icache_en;
   std::vector<bool> impl_table;
 
   std::vector<insn_desc_t> instructions;

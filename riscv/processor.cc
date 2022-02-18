@@ -621,6 +621,12 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
                              (proc->extension_enabled(EXT_ZICBOZ) ? HENVCFG_CBZE: 0);
   csrmap[CSR_HENVCFG] = henvcfg = std::make_shared<masked_csr_t>(proc, CSR_HENVCFG, henvcfg_mask, 0);
 
+  // Ibex-specific CSRs
+  csrmap[CSR_CPUCTRL] = std::make_shared<cpuctrl_csr_t>(proc, CSR_CPUCTRL,
+                                                        proc->get_secure_ibex(),
+                                                        proc->get_icache_en());
+  csrmap[CSR_SECURESEED] = std::make_shared<const_csr_t>(proc, CSR_SECURESEED, 0);
+
   serialized = false;
 
 #ifdef RISCV_ENABLE_COMMITLOG
@@ -803,6 +809,12 @@ void processor_t::set_mmu_capability(int cap)
       set_impl(IMPL_MMU, false);
       break;
   }
+}
+
+void processor_t::set_ibex_flags(bool si, bool ie)
+{
+  secure_ibex = si;
+  icache_en = ie;
 }
 
 void processor_t::take_interrupt(reg_t pending_interrupts)

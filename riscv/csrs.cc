@@ -1258,3 +1258,19 @@ bool vxsat_csr_t::unlogged_write(const reg_t val) noexcept {
   dirty_vs_state;
   return masked_csr_t::unlogged_write(val);
 }
+
+
+cpuctrl_csr_t::cpuctrl_csr_t(processor_t* const proc, const reg_t addr, bool secure_ibex, bool icache_en):
+  csr_t(proc, addr), secure_ibex(secure_ibex), icache_en(icache_en) {
+}
+
+reg_t cpuctrl_csr_t::read() const noexcept {
+  reg_t mask = (secure_ibex ? 0x3e : 0) | (icache_en ? 0x1 : 0);
+  return value & mask;
+}
+
+bool cpuctrl_csr_t::unlogged_write(const reg_t val) noexcept {
+  // As per the Ibex spec, only the bottom 6 bits of cpuctrl are accessible.
+  value = val & 0x3f;
+  return true;
+}

@@ -711,4 +711,17 @@ class vxsat_csr_t: public masked_csr_t {
   virtual bool unlogged_write(const reg_t val) noexcept override;
 };
 
+
+class cpuctrl_csr_t: public csr_t {
+ public:
+  cpuctrl_csr_t(processor_t* const proc, const reg_t addr, bool secure_ibex, bool icache_en);
+  virtual reg_t read() const noexcept override;
+ protected:
+  virtual bool unlogged_write(const reg_t val) noexcept override;
+ private:
+  bool secure_ibex;
+  bool icache_en;
+  reg_t value;
+};
+
 #endif

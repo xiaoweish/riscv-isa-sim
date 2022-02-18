@@ -38,6 +38,7 @@ sim_t::sim_t(const cfg_t *cfg, bool halted,
 #ifdef HAVE_BOOST_ASIO
              boost::asio::io_service *io_service_ptr, boost::asio::ip::tcp::acceptor *acceptor_ptr, // option -s
 #endif
+             bool secure_ibex, bool icache_en,
              FILE *cmd_file) // needed for command line option --cmd
   : htif_t(args),
     isa(cfg->isa(), cfg->priv()),
@@ -79,9 +80,10 @@ sim_t::sim_t(const cfg_t *cfg, bool halted,
   for (size_t i = 0; i < cfg->nprocs(); i++) {
     procs[i] = new processor_t(&isa, cfg->varch(), this, cfg->hartids()[i], halted,
                                log_file.get(), sout_);
+    procs[i]->set_ibex_flags(secure_ibex, icache_en);
   }
 
-  make_dtb();
+  make_dtb(secure_ibex, icache_en);
 
   void *fdt = (void *)dtb.c_str();
 
@@ -285,7 +287,7 @@ bool sim_t::mmio_store(reg_t addr, size_t len, const uint8_t* bytes)
   return bus.store(addr, len, bytes);
 }
 
-void sim_t::make_dtb()
+void sim_t::make_dtb(bool secure_ibex, bool icache_en)
 {
   if (!dtb_file.empty()) {
     std::ifstream fin(dtb_file.c_str(), std::ios::binary);
@@ -302,7 +304,8 @@ void sim_t::make_dtb()
     std::pair<reg_t, reg_t> initrd_bounds = cfg->initrd_bounds();
     dts = make_dts(INSNS_PER_RTC_TICK, CPU_HZ,
                    initrd_bounds.first, initrd_bounds.second,
-                   cfg->bootargs(), procs, mems);
+                   cfg->bootargs(), procs, mems,
+                   secure_ibex, icache_en);
     dtb = dts_compile(dts);
   }
 

@@ -223,8 +223,14 @@ static void set_cfg() {
         actual_pmpaddr_fail = 1;
     }
     
-    wval = (@cfg_idx:int@ == 0 ? cfg0 : 0) 
-            ^ (@revert_rwx:int@ << (@cfg_sub_idx:int@ * 8));
+    // Update cfg0 to avoid changing idx other than @cfg_idx:int@
+    asm volatile ("csrr %0, pmpcfg@cfg_idx:int@ \n"
+                    : "=r"(cfg0)
+                    :
+                    : "memory");
+    
+    // reuse lock_once here since it's for RLB and independent with pmp_lock
+    wval = cfg0 ^ ((@revert_rwx:int@ | (@lock_once:int@ ? PMP_L : 0))<< (@cfg_sub_idx:int@ * 8));
     asm volatile ("csrw pmpcfg@cfg_idx:int@, %1 \n"
                 "\tcsrr %0, pmpcfg@cfg_idx:int@ \n"
             : "=r"(rval)

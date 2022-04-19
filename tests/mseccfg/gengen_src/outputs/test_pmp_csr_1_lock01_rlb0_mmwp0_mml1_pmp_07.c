@@ -77,7 +77,7 @@ static unsigned actual_seccfg_fail = 0;
 static const unsigned long expected_pmpaddr_fail = 0;
 static unsigned actual_pmpaddr_fail = 0;
 
-static const unsigned long expected_pmpcfg_fail = 1;
+static const unsigned long expected_pmpcfg_fail = 0;
 static unsigned actual_pmpcfg_fail = 0;
 
 static void checkTestResult(void);
@@ -223,8 +223,14 @@ static void set_cfg() {
         actual_pmpaddr_fail = 1;
     }
     
-    wval = (0 == 0 ? cfg0 : 0) 
-            ^ (7 << (3 * 8));
+    // Update cfg0 to avoid changing idx other than 0
+    asm volatile ("csrr %0, pmpcfg0 \n"
+                    : "=r"(cfg0)
+                    :
+                    : "memory");
+    
+    // reuse lock_once here since it's for RLB and independent with pmp_lock
+    wval = cfg0 ^ ((7 | (1 ? PMP_L : 0))<< (3 * 8));
     asm volatile ("csrw pmpcfg0, %1 \n"
                 "\tcsrr %0, pmpcfg0 \n"
             : "=r"(rval)

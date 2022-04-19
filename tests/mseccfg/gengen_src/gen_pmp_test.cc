@@ -209,10 +209,12 @@ main()
                 }
 
                 /*
-                 * When RLB is not set,
-                 * PMP_L (in test, as lock_once || pmp_lock) is not allowed for MML==1
+                 * When RLB is not set, PMP_L is not allowed for MML==1, when
+                 * - PMP_X set, either for locked-executable or locked-share
+                 * - RW=01, for locked-shared-executable
                  */
-                if (!pre_rlb && pre_mml && (lock_once || pmp_lock)) {
+                bool set_PMP_L = (lock_once != pmp_lock);
+                if (!pre_rlb && pre_mml && set_PMP_L && ((val & 0x4) == 0x0 || (val & 0x3) == 0x1)) {
                     pmpcfg_fail = 1;
                 }
             }
@@ -224,7 +226,13 @@ main()
             if (!pre_mml && (val & 0x3) == 0x2) { // b'00^10 = 10, RW=01
                 pmpcfg_fail = 1;
             }
-            // PMP_L is not set currently in test
+            /*
+             * PMP_L cases with default LRWX=0000
+             */
+            bool set_PMP_L = (lock_once != 0);
+            if (!pre_rlb && pre_mml && set_PMP_L && ((val & 0x4) == 0x4 || (val & 0x3) == 0x2)) {
+                pmpcfg_fail = 1;
+            }
         }
 
         if (pmpcfg_fail || pmpaddr_fail) cur_expected_errors += 1;

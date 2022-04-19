@@ -225,11 +225,11 @@ __attribute ((noinline))
 static void try_access() {
 #if TEST_RW
     target_arr[0] += 1;
-    const unsigned long delta = 0x1020304005060708UL;
+    const unsigned long delta = (unsigned long)0x1020304005060708ULL;
     *(long *)target_arr += delta;
 
     if (actual_r_fail == 0 && actual_w_fail == 0) {
-        if (*(long *)target_arr != 0x0807060504030201UL + delta + 1) {
+        if (*(long *)target_arr != (unsigned long)0x0807060504030201ULL + delta + 1) {
             actual_r_fail = 1;
             actual_w_fail = 1;
         }
@@ -262,7 +262,8 @@ void try_access_umode() {
     /*
      * switch to M mode by invoking a write access fault for special address.
      */ 
-    *(char *)(FAKE_ADDRESS) = 1;
+    volatile unsigned char * p = (unsigned char *)(FAKE_ADDRESS);
+    *p = 1;
 }
 
 static void checkTestResult() {

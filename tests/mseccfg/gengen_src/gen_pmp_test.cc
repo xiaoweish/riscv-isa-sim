@@ -175,6 +175,7 @@ main()
 
     gen_class_2.set_tag(str_buffer.str());
 
+    gen_class_2.set_m_mode_rwx(0);
     gen_class_2.set_pmp_lock(pmp_lock);
     gen_class_2.set_lock_once(lock_once);
 
@@ -201,10 +202,19 @@ main()
             if (pmp_lock && !pre_rlb) {
                 pmpcfg_fail = 1;
                 pmpaddr_fail = 1;
-            }
+            } else {
+                // RW=01 is not allowed for MML==0
+                if (!pre_mml && (val & 0x3) == 0x1) { // b'11^01 = 10, RW=01
+                    pmpcfg_fail = 1;
+                }
 
-            if (!pre_mml && (val & 0x3) == 0x1) { // b'11^01 = 10, RW=01
-                pmpcfg_fail = 1;
+                /*
+                 * When RLB is not set,
+                 * PMP_L (in test, as lock_once || pmp_lock) is not allowed for MML==1
+                 */
+                if (!pre_rlb && pre_mml && (lock_once || pmp_lock)) {
+                    pmpcfg_fail = 1;
+                }
             }
         } else {    // for invalid cfgs, start from 7
             gen_class_2.set_addr_idx(7 + cur_files_count % (max_pmp - 7));
@@ -214,6 +224,7 @@ main()
             if (!pre_mml && (val & 0x3) == 0x2) { // b'00^10 = 10, RW=01
                 pmpcfg_fail = 1;
             }
+            // PMP_L is not set currently in test
         }
 
         if (pmpcfg_fail || pmpaddr_fail) cur_expected_errors += 1;

@@ -150,7 +150,7 @@ static volatile unsigned char target_arr[100] = {
 static int detect_pmp_granularity(){
     unsigned int granule;
     unsigned long int temp_reg;
-    unsigned long int all_ones = 0xffffffffffffffffULL;
+    unsigned long int all_ones = ~0x0UL;
 
     asm volatile ("csrw pmpaddr0, %0 \n" :: "r"(all_ones) : "memory");
     asm volatile ("csrr %0, pmpaddr0 \n" : "=r"(temp_reg));
@@ -280,10 +280,10 @@ __attribute ((noinline))
 static void try_access() {
 #if TEST_RW
     target_arr[0] += 1;
-    const unsigned long delta = 0x1020304005060708UL;
+    const unsigned long delta = (unsigned long)0x1020304005060708ULL;
     *(long *)target_arr += delta;
 
-    if (*(long *)target_arr != 0x0807060504030201UL + delta + 1) {
+    if (*(long *)target_arr != (unsigned long)0x0807060504030201ULL + delta + 1) {
         actual_rw_fail = 1;
     }
 #endif
@@ -313,8 +313,9 @@ void try_access_umode() {
     
     /*
      * switch to M mode by invoking a write access fault for special address.
-     */ 
-    *(char *)(FAKE_ADDRESS) = 1;
+     */
+    volatile unsigned char * p = (unsigned char *)(FAKE_ADDRESS);
+    *p = 1;
 }
 
 static void checkTestResult() {

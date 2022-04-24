@@ -230,7 +230,7 @@ static void set_cfg() {
                     : "memory");
     
     // reuse lock_once here since it's for RLB and independent with pmp_lock
-    wval = cfg0 ^ ((3 | (1 ? PMP_L : 0))<< (2 * 8));
+    wval = cfg0 ^ ((reg_t)(3 | (1 ? PMP_L : 0)) << (2 * 8));
     asm volatile ("csrw pmpcfg2, %1 \n"
                 "\tcsrr %0, pmpcfg2 \n"
             : "=r"(rval)

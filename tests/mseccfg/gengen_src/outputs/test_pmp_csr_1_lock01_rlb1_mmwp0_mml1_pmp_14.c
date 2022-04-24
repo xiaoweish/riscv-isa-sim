@@ -223,14 +223,14 @@ static void set_cfg() {
         actual_pmpaddr_fail = 1;
     }
     
-    // Update cfg0 to avoid changing idx other than 2
+    // Update cfg0 to avoid changing idx other than 3
     asm volatile ("csrr %0, pmpcfg2 \n"
                     : "=r"(cfg0)
                     :
                     : "memory");
     
     // reuse lock_once here since it's for RLB and independent with pmp_lock
-    wval = cfg0 ^ ((4 | (1 ? PMP_L : 0))<< (3 * 8));
+    wval = cfg0 ^ ((reg_t)(4 | (1 ? PMP_L : 0)) << (3 * 8));
     asm volatile ("csrw pmpcfg2, %1 \n"
                 "\tcsrr %0, pmpcfg2 \n"
             : "=r"(rval)

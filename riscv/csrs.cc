@@ -189,7 +189,7 @@ bool pmpaddr_csr_t::subset_match(reg_t addr, reg_t len) const noexcept {
 
 
 bool pmpaddr_csr_t::access_ok(access_type type, reg_t mode) const noexcept {
-	bool cfgx = cfg & PMP_X;
+  bool cfgx = cfg & PMP_X;
   bool cfgw = cfg & PMP_W;
   bool cfgr = cfg & PMP_R;
   bool cfgl = cfg & PMP_L;
@@ -203,19 +203,19 @@ bool pmpaddr_csr_t::access_ok(access_type type, reg_t mode) const noexcept {
   bool mseccfg_mml = state->mseccfg->get_mml();
 
   if (mseccfg_mml) {
-      if (cfgx && cfgw && cfgr && cfgl) {
-          // Locked Shared data region: Read only on both M and S/U mode.
-          return typer;
-      } else {
-        bool mml_shared_region = !cfgr && cfgw;
-        bool mml_chk_normal = (prvm == cfgl) && normal_rwx;
-        bool mml_chk_shared =
-            (!cfgl && cfgx && (typer || typew)) ||
-            (!cfgl && !cfgx && (typer || (typew && prvm))) ||
-            (cfgl && typex) ||
-            (cfgl && typer && cfgx && prvm);
-        return mml_shared_region ? mml_chk_shared : mml_chk_normal;
-      }
+    if (cfgx && cfgw && cfgr && cfgl) {
+      // Locked Shared data region: Read only on both M and S/U mode.
+      return typer;
+    } else {
+      bool mml_shared_region = !cfgr && cfgw;
+      bool mml_chk_normal = (prvm == cfgl) && normal_rwx;
+      bool mml_chk_shared =
+              (!cfgl && cfgx && (typer || typew)) ||
+              (!cfgl && !cfgx && (typer || (typew && prvm))) ||
+              (cfgl && typex) ||
+              (cfgl && typer && cfgx && prvm);
+      return mml_shared_region ? mml_chk_shared : mml_chk_normal;
+    }
   } else {
     bool m_bypass = (prvm && !cfgl);
     return m_bypass || normal_rwx;
@@ -307,7 +307,6 @@ bool mseccfg_csr_t::unlogged_write(const reg_t val) noexcept {
     return false;
 
   //When mseccfg.RLB is 0 and pmpcfg.L is 1 in any rule or entry (including disabled entries)
-  //Otherwise drop the write
   if (!(pmplock_recorded && (mseccfg_val & MSECCFG_RLB)==0)) { 
     mseccfg_val &= ~MSECCFG_RLB;
     mseccfg_val |= (val & MSECCFG_RLB);

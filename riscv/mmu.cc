@@ -240,7 +240,8 @@ bool mmu_t::pmp_ok(reg_t addr, reg_t len, access_type type, reg_t mode)
       // If the PMP matches only a strict subset of the access, fail it
       if (!all_match)
         return false;
-      return (proc->state.pmpaddr[i]->access_ok(type, mode));
+
+      return proc->state.pmpaddr[i]->access_ok(type, mode);
     }
   }
   return ((mode == PRV_M) && !mseccfg_mmwp && (!mseccfg_mml || ((type == LOAD) || (type == STORE))));

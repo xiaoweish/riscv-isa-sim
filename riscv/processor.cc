@@ -360,7 +360,7 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
 
   csrmap[CSR_MSECCFG] = mseccfg = std::make_shared<mseccfg_csr_t>(proc, CSR_MSECCFG);
 
-  for (int i=0; i < max_pmp; ++i) {
+  for (int i = 0; i < max_pmp; ++i) {
     csrmap[CSR_PMPADDR0 + i] = pmpaddr[i] = std::make_shared<pmpaddr_csr_t>(proc, CSR_PMPADDR0 + i);
   }
   for (int i = 0; i < max_pmp; i += xlen / 8) {

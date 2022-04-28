@@ -77,7 +77,7 @@ static unsigned actual_seccfg_fail = 0;
 static const unsigned long expected_pmpaddr_fail = 0;
 static unsigned actual_pmpaddr_fail = 0;
 
-static const unsigned long expected_pmpcfg_fail = 1;
+static const unsigned long expected_pmpcfg_fail = 0;
 static unsigned actual_pmpcfg_fail = 0;
 
 static void checkTestResult(void);

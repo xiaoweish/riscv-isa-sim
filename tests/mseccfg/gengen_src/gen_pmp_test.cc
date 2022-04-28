@@ -209,12 +209,12 @@ main()
                 }
 
                 /*
-                 * When RLB is not set, PMP_L is not allowed for MML==1, when
-                 * - PMP_X set, either for locked-executable or locked-share
-                 * - RW=01, for locked-shared-executable
+                 * Adding a rule with executable privileges that either is M-mode-only or a locked Shared-Region
+                 * is not possible and such pmpcfg writes are ignored, leaving pmpcfg unchanged.
                  */
                 bool set_PMP_L = (lock_once != pmp_lock);
-                if (!pre_rlb && pre_mml && set_PMP_L && ((val & 0x4) == 0x0 || (val & 0x3) == 0x1)) {
+                unsigned rwx = 7 ^ val;
+                if (!pre_rlb && pre_mml && set_PMP_L && (rwx != 7) && ((rwx & 0x4) == 0x4 || (rwx & 0x3) == 0x2)) {
                     pmpcfg_fail = 1;
                 }
             }
@@ -230,7 +230,8 @@ main()
              * PMP_L cases with default LRWX=0000
              */
             bool set_PMP_L = (lock_once != 0);
-            if (!pre_rlb && pre_mml && set_PMP_L && ((val & 0x4) == 0x4 || (val & 0x3) == 0x2)) {
+            unsigned rwx = 0 ^ val;
+            if (!pre_rlb && pre_mml && set_PMP_L && (rwx != 7) && ((rwx & 0x4) == 0x4 || (rwx & 0x3) == 0x2)) {
                 pmpcfg_fail = 1;
             }
         }

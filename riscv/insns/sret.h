@@ -22,6 +22,4 @@ if (!STATE.v) {
     reg_t new_hstatus = set_field(prev_hstatus, HSTATUS_SPV, 0);
     STATE.hstatus->write(new_hstatus);
   }
-
-  STATE.mstatus->write(set_field(STATE.mstatus->read(), MSTATUS_MPRV, 0));
 }

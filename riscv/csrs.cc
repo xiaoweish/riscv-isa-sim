@@ -13,6 +13,9 @@
 #include "trap.h"
 // For require():
 #include "insn_macros.h"
+// For differentiating between MRET/MINSTRET and MCOUNTER
+#include "encoding.h"
+
 
 // STATE macro used by require_privilege() macro:
 #undef STATE
@@ -951,18 +954,23 @@ bool wide_counter_csr_t::unlogged_write(const reg_t val) noexcept {
   // takes precedence over the increment to instret.  However, Spike
   // unconditionally increments instret after executing an instruction.
   // Correct for this artifact by decrementing instret here.
-  this->val--;
+  if (this->address == CSR_MCYCLE || this->address == CSR_MINSTRET)
+    this->val--;
   return true;
 }
 
 reg_t wide_counter_csr_t::written_value() const noexcept {
   // Re-adjust for upcoming bump()
-  return this->val + 1;
+  if (this->address == CSR_MCYCLE || this->address == CSR_MINSTRET)
+    return this->val + 1;
+  else
+    return this->val;
 }
 
 void wide_counter_csr_t::write_upper_half(const reg_t val) noexcept {
   this->val = (val << 32) | (this->val << 32 >> 32);
-  this->val--; // See comment above.
+  if (this->address == CSR_MCYCLE || this->address == CSR_MINSTRET)
+    this->val--; // See comment above.
   // Log upper half only.
   log_special_write(address + (CSR_MINSTRETH - CSR_MINSTRET), written_value() >> 32);
 }

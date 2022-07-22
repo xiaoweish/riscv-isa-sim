@@ -211,26 +211,24 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
       csrmap[CSR_CYCLEH] = std::make_shared<counter_proxy_csr_t>(proc, CSR_CYCLEH, mcycleh);
     }
   }
-  for (reg_t i = 3; i <= 31; ++i) {
-    const reg_t which_mevent = CSR_MHPMEVENT3 + i - 3;
-    const reg_t which_mcounter = CSR_MHPMCOUNTER3 + i - 3;
-    const reg_t which_mcounterh = CSR_MHPMCOUNTER3H + i - 3;
-    const reg_t which_counter = CSR_HPMCOUNTER3 + i - 3;
-    const reg_t which_counterh = CSR_HPMCOUNTER3H + i - 3;
-    auto mevent = std::make_shared<const_csr_t>(proc, which_mevent, 0);
-    auto mcounter = std::make_shared<const_csr_t>(proc, which_mcounter, 0);
+  for (reg_t i = 0; i <= 28; ++i) {
+    const reg_t which_mevent = CSR_MHPMEVENT3 + i;
+    const reg_t which_mcounter = CSR_MHPMCOUNTER3 + i;
+    const reg_t which_mcounterh = CSR_MHPMCOUNTER3H + i;
+    const reg_t which_counter = CSR_HPMCOUNTER3 + i;
+    const reg_t which_counterh = CSR_HPMCOUNTER3H + i;
+    auto mevent = std::make_shared<const_csr_t>(proc, which_mevent, 1<<i);
     csrmap[which_mevent] = mevent;
-    csrmap[which_mcounter] = mcounter;
+    csrmap[which_mcounter] = mcounter[i] = std::make_shared<wide_counter_csr_t>(proc, which_mcounter);
 
     if (proc->extension_enabled_const(EXT_ZICNTR) && proc->extension_enabled_const(EXT_ZIHPM)) {
-      auto counter = std::make_shared<counter_proxy_csr_t>(proc, which_counter, mcounter);
+      auto counter = std::make_shared<counter_proxy_csr_t>(proc, which_counter, mcounter[i]);
       csrmap[which_counter] = counter;
     }
     if (xlen == 32) {
-      auto mcounterh = std::make_shared<const_csr_t>(proc, which_mcounterh, 0);
-      csrmap[which_mcounterh] = mcounterh;
+      csrmap[which_mcounterh] = mcounterh[i] = std::make_shared<counter_top_csr_t>(proc, which_mcounterh, mcounter[i]);
       if (proc->extension_enabled_const(EXT_ZICNTR) && proc->extension_enabled_const(EXT_ZIHPM)) {
-        auto counterh = std::make_shared<counter_proxy_csr_t>(proc, which_counterh, mcounterh);
+        auto counterh = std::make_shared<counter_proxy_csr_t>(proc, which_counterh, mcounterh[i]);
         csrmap[which_counterh] = counterh;
       }
     }

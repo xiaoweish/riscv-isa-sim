@@ -424,7 +424,13 @@ inline long double to_f(float128_t f) { long double r; memcpy(&r, &f, sizeof(r))
   reg_t s##field = get_field(STATE.senvcfg->read(), SENVCFG_##field); \
   reg_t h##field = get_field(STATE.henvcfg->read(), HENVCFG_##field)
 
-#define DEBUG_START             0x0
-#define DEBUG_END               (0x1000 - 1)
+// lowRISC HACK - FIXME  // (original-values)
+// These values are used for the Spike debug_module (which we don't use), and
+// also to define an access check (mmu_t::mmio_ok), which disallows access to
+// debug region when not in debug mode.
+// The Debug_Rom in the ibex regression testbench can move around, so this would
+// need to be tied to built values somehow, or modified to be set at runtime.
+#define DEBUG_START             0x40000000   // (0x0)
+#define DEBUG_END               0x40000000   // (0x1000 - 1)
 
 #endif

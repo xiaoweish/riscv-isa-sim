@@ -1314,12 +1314,12 @@ bool vxsat_csr_t::unlogged_write(const reg_t val) noexcept {
 }
 
 
-cpuctrl_csr_t::cpuctrl_csr_t(processor_t* const proc, const reg_t addr, bool secure_ibex, bool icache_en):
-  csr_t(proc, addr), secure_ibex(secure_ibex), icache_en(icache_en) {
+cpuctrl_csr_t::cpuctrl_csr_t(processor_t* const proc, const reg_t addr):
+  csr_t(proc, addr) {
 }
 
 reg_t cpuctrl_csr_t::read() const noexcept {
-  reg_t mask = (secure_ibex ? 0x3e : 0) | (icache_en ? 0x1 : 0);
+  reg_t mask = (proc->get_secure_ibex() ? 0x3e : 0) | (proc->get_icache_en() ? 0x1 : 0);
   return value & mask;
 }
 

@@ -392,9 +392,7 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
   csrmap[CSR_HENVCFG] = henvcfg = std::make_shared<henvcfg_csr_t>(proc, CSR_HENVCFG, henvcfg_mask, henvcfg_init, menvcfg);
 
   // Ibex-specific CSRs
-  csrmap[CSR_CPUCTRL] = std::make_shared<cpuctrl_csr_t>(proc, CSR_CPUCTRL,
-                                                        proc->get_secure_ibex(),
-                                                        proc->get_icache_en());
+  csrmap[CSR_CPUCTRL] = std::make_shared<cpuctrl_csr_t>(proc, CSR_CPUCTRL);
   csrmap[CSR_SECURESEED] = std::make_shared<const_csr_t>(proc, CSR_SECURESEED, 0);
 
   serialized = false;

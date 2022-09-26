@@ -202,6 +202,7 @@ struct state_t
   } single_step;
 
   bool nmi;
+  bool nmi_int;
 
 #ifdef RISCV_ENABLE_COMMITLOG
   commit_log_reg_t log_reg_write;
@@ -368,6 +369,9 @@ private:
     if (!state.debug_mode && state.nmi) {
       state.nmi = false;
       throw trap_t(((reg_t)1 << (get_isa().get_max_xlen()-1)) | NMI_INTERRUPT_NUM);
+    }
+    if (!state.debug_mode && state.nmi_int) {
+      throw trap_t(((reg_t)1 << get_isa().get_max_xlen()) - 1 - NMI_INTERRUPT_NUM);
     }
 
     take_interrupt(state.mip->read() & state.mie->read());

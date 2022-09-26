@@ -245,8 +245,7 @@ bool mmu_t::pmp_ok(reg_t addr, reg_t len, access_type type, reg_t mode)
   // in case matching region is not found
   const bool mseccfg_mml = proc->state.mseccfg->get_mml();
   const bool mseccfg_mmwp = proc->state.mseccfg->get_mmwp();
-  return ((mode == PRV_M) && !mseccfg_mmwp
-          && (!mseccfg_mml || ((type == LOAD) || (type == STORE))));
+  return ((mode == PRV_M) && (!mseccfg_mmwp) && ((!mseccfg_mml) || (type == LOAD) || (type == STORE)));
 }
 
 reg_t mmu_t::pmp_homogeneous(reg_t addr, reg_t len)

@@ -327,6 +327,7 @@ public:
 
   void set_pmp_num(reg_t pmp_num);
   void set_pmp_granularity(reg_t pmp_granularity);
+  void set_mhpm_counter_num(reg_t mhpm_counter_num);
   void set_mmu_capability(int cap);
   void set_ibex_flags(bool secure_ibex, bool icache_en);
   void set_ic_scr_key_valid(bool valid) { ic_scr_key_valid = valid; }
@@ -395,6 +396,7 @@ private:
 public:
   entropy_source es; // Crypto ISE Entropy source.
 
+  reg_t num_mhpm_counters;
   reg_t n_pmp;
   reg_t lg_pmp_granularity;
   reg_t pmp_tor_mask() { return -(reg_t(1) << (lg_pmp_granularity - PMP_SHIFT)); }

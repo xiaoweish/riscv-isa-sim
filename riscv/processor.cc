@@ -217,8 +217,16 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
     const reg_t which_mcounterh = CSR_MHPMCOUNTER3H + i;
     const reg_t which_counter = CSR_HPMCOUNTER3 + i;
     const reg_t which_counterh = CSR_HPMCOUNTER3H + i;
-    auto mevent = std::make_shared<const_csr_t>(proc, which_mevent, 1<<i);
-    csrmap[which_mevent] = mevent;
+    if (i < proc->num_mhpm_counters)
+    {
+      auto mevent = std::make_shared<const_csr_t>(proc, which_mevent, 1<<i);
+      csrmap[which_mevent] = mevent;
+    }
+    else
+    {
+      auto mevent = std::make_shared<const_csr_t>(proc, which_mevent, 0);
+      csrmap[which_mevent] = mevent;
+    }
     csrmap[which_mcounter] = mcounter[i] = std::make_shared<wide_counter_csr_t>(proc, which_mcounter);
 
     if (proc->extension_enabled_const(EXT_ZICNTR) && proc->extension_enabled_const(EXT_ZIHPM)) {
@@ -584,6 +592,11 @@ void processor_t::set_ibex_flags(bool si, bool ie)
 {
   secure_ibex = si;
   icache_en = ie;
+}
+
+void processor_t::set_mhpm_counter_num(reg_t mhpm_counter_num)
+{
+  num_mhpm_counters = mhpm_counter_num;
 }
 
 void processor_t::take_interrupt(reg_t pending_interrupts)

@@ -2,8 +2,8 @@
 
 XLEN ?= 32
 VLEN ?= 1024
-RISCV_TOOL ?= /home/saad/Downloads/lowrisc-toolchain-gcc-rv32imcb-20220524-1/bin/
-SPIKE_PATH ?= /home/saad/work/riscv-isa-sim/build
+RISCV_TOOL ?= ~/lowrisc-toolchain-gcc-rv32imcb-20220524-1/bin/
+SPIKE_PATH ?= ~/riscv-isa-sim/build
 SAIL_EMULATOR_PATH = /home/scratch.soberl_maxwell/arch1/sail_2021/sail-riscv/c_emulator
 
 SSP_OPT ?=

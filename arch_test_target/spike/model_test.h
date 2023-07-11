@@ -1,3 +1,5 @@
+#include "ibex_macros.h"
+
 #ifndef _COMPLIANCE_MODEL_H
 #define _COMPLIANCE_MODEL_H
 
@@ -19,10 +21,12 @@
 
 //RV_COMPLIANCE_HALT
 #define RVMODEL_HALT                                              \
-  addi x1, x1, 4; \
-  li x1, 1;                                                                   \
-  write_tohost:                                                               \
-    sw x1, tohost, t1;                                                        \
+  fence;                                                          \
+  li x2, SIGNATURE_ADDR;                                          \
+  li x1, (FINISHED_IRQ << 8) | CORE_STATUS;                       \
+  sw x1, 0(x2);                                                   \
+  li x1, (TEST_PASS << 8) | TEST_RESULT;                          \
+  sw x1, 0(x2);                                                   \
   self_loop:  j self_loop;
 
 #define RVMODEL_BOOT

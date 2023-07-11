@@ -2,8 +2,8 @@
 
 XLEN ?= 32
 VLEN ?= 1024
-RISCV_TOOL ?= /home/scratch.soberl_maxwell/arch1/riscv-tools-rvv_new/build_centos/bin
-SPIKE_PATH ?= /home/scratch.soberl_maxwell/arch1/riscv-tools-p1.12/riscvsim_joe/riscv-isa-sim_epmp/build
+RISCV_TOOL ?= /home/saad/Downloads/lowrisc-toolchain-gcc-rv32imcb-20220524-1/bin/
+SPIKE_PATH ?= /home/saad/work/riscv-isa-sim/build
 SAIL_EMULATOR_PATH = /home/scratch.soberl_maxwell/arch1/sail_2021/sail-riscv/c_emulator
 
 SSP_OPT ?=
@@ -42,7 +42,7 @@ gen:
 	
 $(OBJECTS):
 	@$(RISCV_TOOL)/riscv$(XLEN)-unknown-elf-gcc $(CFLAGS) $(TEST_PATH)/$@.c $(COMMON_FILES) $(LDFLAGS) -o a.out 
-	@echo Running $(TEST_PATH)/$@.c
+	@echo Running $(TEST_PATH)/$@.c - command - $(RISCV_TOOL)/riscv$(XLEN)-unknown-elf-gcc $(CFLAGS) $(TEST_PATH)/$@.c $(COMMON_FILES) $(LDFLAGS) -o a.out
 	@$(RISCV_TOOL)/riscv$(XLEN)-unknown-elf-objdump -d a.out > a.ss
 	@$(RISCV_TOOL)/riscv$(XLEN)-unknown-elf-objdump --disassemble=target_foo a.out >> a.ss
 ifeq ($(PERF), 0)

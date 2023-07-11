@@ -65,8 +65,8 @@ void exit(int code);
 /*
  * local status
  */
-#define TEST_MEM_START 0x200000
-#define TEST_MEM_END 0x240000
+#define TEST_MEM_START 0x80200000
+#define TEST_MEM_END 0x80240000
 #define U_MEM_END (TEST_MEM_END + 0x10000)
 #define FAKE_ADDRESS 0x10000000
 
@@ -90,7 +90,6 @@ uintptr_t handle_trap(uintptr_t cause, uintptr_t epc, uintptr_t regs[32])
     } else if (cause == CAUSE_LOAD_ACCESS || cause == CAUSE_STORE_ACCESS) {
         reg_t addr;
         asm volatile ("csrr %0, mtval\n" : "=r"(addr));
-//        printf("addr = 0x%x\n", addr);
         if (addr >= TEST_MEM_START && addr < TEST_MEM_END) {
             actual_rw_fail = 1;
             return epc + 4;
@@ -103,7 +102,6 @@ uintptr_t handle_trap(uintptr_t cause, uintptr_t epc, uintptr_t regs[32])
         }
     }
     
-    printf("cause = %ld, epc = 0x%lx\n", cause, epc);
     tohost_exit(1337);
 }
 
@@ -211,20 +209,23 @@ static void set_cfg() {
         volatile int pmp_granularity = detect_pmp_granularity();
         mismatch_offset = mismatch_addr_offset(pmp_granularity);
     }
-
+    asm volatile ("csrw pmpaddr7, %0 \n" :: "r"(0x8ffffff8 >> 2) : "memory");       // for ibex signature addr
     asm volatile ("csrw pmpaddr3, %0 \n" :: "r"(U_MEM_END >> 2) : "memory");
     asm volatile ("csrw pmpaddr2, %0 \n" :: "r"(TEST_MEM_END >> 2) : "memory");
     asm volatile ("csrw pmpaddr1, %0 \n" :: "r"((TEST_MEM_START + mismatch_offset) >> 2) : "memory");
     
 #if M_MODE_RWX
-    asm volatile ("csrw pmpaddr0, %0 \n" :: "r"((TEST_MEM_START >> 3) - 1) : "memory");
+    asm volatile ("csrw pmpaddr0, %0 \n" :: "r"((0x80000000 >> 2) | 0xfffff) : "memory");
     reg_t cfg0 = (PMP_R | PMP_W | PMP_X | PMP_NAPOT);
+    reg_t cfg1 = (PMP_R | PMP_W | PMP_NAPOT) << 24;
 #else
-    asm volatile ("csrw pmpaddr6, %0 \n" :: "r"(TEST_MEM_START >> 2) : "memory"); // for data
-    asm volatile ("csrw pmpaddr5, %0 \n" :: "r"(0x110000 >> 2) : "memory");       // for code
-    asm volatile ("csrw pmpaddr4, %0 \n" :: "r"(0x100000 >> 2) : "memory");       // addr start
+    asm volatile ("csrw pmpaddr6, %0 \n" :: "r"(TEST_MEM_START >> 2) : "memory");   // for data
+    asm volatile ("csrw pmpaddr5, %0 \n" :: "r"(0x80010000 >> 2) : "memory");       // for code
+    asm volatile ("csrw pmpaddr4, %0 \n" :: "r"(0x80000000 >> 2) : "memory");       // addr start
     reg_t cfg0 = PMP_OFF;
-    reg_t cfg1 = PMP_OFF | ((PMP_R | PMP_W | PMP_TOR) << 16) | ((PMP_X | PMP_TOR) << 8);
+    reg_t cfg1 = PMP_OFF | ((PMP_R | PMP_W | PMP_NAPOT) << 24)
+                         | ((PMP_R | PMP_W | PMP_TOR) << 16) 
+                         | ((PMP_X | PMP_TOR) << 8);
 #endif
     
     // Only true for Spike
@@ -236,8 +237,9 @@ static void set_cfg() {
     if (1) {    // need to set L bit for M mode code like trap_handling
 #if M_MODE_RWX
         cfg0 |= PMP_L;
+        cfg1 |= (PMP_L << 24);
 #else
-        cfg1 |= ((PMP_L << 8) | (PMP_L << 16));
+        cfg1 |= ((PMP_L << 8) | (PMP_L << 16) | (PMP_L << 24));
 #endif
     }
     
@@ -249,7 +251,6 @@ static void set_cfg() {
             | PMP_TOR | (0 ? PMP_L : 0)) << 16;
 #endif   
     
-#if !M_MODE_RWX
 #if __riscv_xlen == 64
     cfg0 |= (cfg1 << 32);
 #else
@@ -258,7 +259,6 @@ static void set_cfg() {
                 : "r"(cfg1)
                 : "memory");
 #endif // __riscv_xlen == 64
-#endif // !M_MODE_RWX
     
     asm volatile ("csrw pmpcfg0, %0 \n"
                 :
@@ -322,15 +322,12 @@ static void checkTestResult() {
     int ret = 0;
     if (expected_rw_fail != actual_rw_fail) {
         ret += 1;
-        printf("Read/write test fail, expected %d, actual %d.\n", expected_rw_fail, actual_rw_fail);
     }
 
     if (expected_x_fail != actual_x_fail) {
         ret += 2;
-        printf("Fetch test fail, expected %d, actual %d.\n", expected_x_fail, actual_x_fail);
     }
     
-    printf("Test done, exit %d.\n", ret);
     
     exit(ret); 
 }

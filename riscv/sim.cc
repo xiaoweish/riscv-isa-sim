@@ -34,6 +34,7 @@ const size_t sim_t::INTERLEAVE;
 
 extern device_factory_t* clint_factory;
 extern device_factory_t* plic_factory;
+extern device_factory_t* clic_factory;
 extern device_factory_t* ns16550_factory;
 
 sim_t::sim_t(const cfg_t *cfg, bool halted,
@@ -118,6 +119,7 @@ sim_t::sim_t(const cfg_t *cfg, bool halted,
   std::vector<const device_factory_t*> device_factories = {
     clint_factory, // clint must be element 0
     plic_factory, // plic must be element 1
+    clic_factory, // clic must be element 2
     ns16550_factory};
   device_factories.insert(device_factories.end(),
                           plugin_device_factories.begin(),
@@ -172,6 +174,8 @@ sim_t::sim_t(const cfg_t *cfg, bool halted,
         clint = std::static_pointer_cast<clint_t>(dev_ptr);
       else if (i == 1) // plic_factory
         plic = std::static_pointer_cast<plic_t>(dev_ptr);
+      else if (i == 2) // clic_factory
+        clic = std::static_pointer_cast<clic_t>(dev_ptr);
     }
   }
 

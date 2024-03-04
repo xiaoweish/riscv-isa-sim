@@ -269,6 +269,21 @@ int fdt_parse_clint(const void *fdt, reg_t *clint_addr,
 
   return 0;
 }
+int fdt_parse_clic(const void *fdt, reg_t *clic_addr,
+                    const char *compatible)
+{
+  int nodeoffset, rc;
+
+  nodeoffset = fdt_node_offset_by_compatible(fdt, -1, compatible);
+  if (nodeoffset < 0)
+    return nodeoffset;
+
+  rc = fdt_get_node_addr_size(fdt, nodeoffset, clic_addr, NULL, "reg");
+  if (rc < 0 || !clic_addr)
+    return -ENODEV;
+
+  return 0;
+}
 
 int fdt_parse_plic(const void *fdt, reg_t *plic_addr, uint32_t *ndev,
                    const char *compatible)

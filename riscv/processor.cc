@@ -218,7 +218,7 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
   csrmap[CSR_MTVAL] = mtval = std::make_shared<basic_csr_t>(proc, CSR_MTVAL, 0);
   csrmap[CSR_MSCRATCH] = std::make_shared<basic_csr_t>(proc, CSR_MSCRATCH, 0);
   csrmap[CSR_MTVEC] = mtvec = std::make_shared<tvec_csr_t>(proc, CSR_MTVEC);
-  csrmap[CSR_MCAUSE] = mcause = std::make_shared<cause_csr_t>(proc, CSR_MCAUSE);
+  csrmap[CSR_MCAUSE] = mcause = std::make_shared<mcause_csr_t>(proc, CSR_MCAUSE);
 
   auto smcntrpmf_enabled = proc->extension_enabled_const(EXT_SMCNTRPMF);
   const reg_t mask = smcntrpmf_enabled ? MHPMEVENT_MINH | MHPMEVENT_SINH |
@@ -583,6 +583,15 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
         csrmap[CSR_MCYCLECFG] = mcyclecfg;
         csrmap[CSR_MINSTRETCFG] = minstretcfg;
       }
+  }
+
+  if (proc->extension_enabled(EXT_SMCLIC)) {
+      csrmap[CSR_MTVT]  = std::make_shared<tvt_t>(proc,CSR_MTVT);
+      csrmap[CSR_MNXTI] = std::make_shared<nxti_t>(proc, CSR_MNXTI);
+      csrmap[CSR_MINTSTATUS] = std::make_shared<intstatus_t>(proc, CSR_MINTSTATUS);
+      csrmap[CSR_MINTTHRESH] = std::make_shared<intthresh_t>(proc, CSR_MINTTHRESH);
+      csrmap[CSR_MSCRATCHCSW] = std::make_shared<scratchcsw_t>(proc, CSR_MSCRATCHCSW);
+      csrmap[CSR_MSCRATCHCSWL] = std::make_shared<scratchcswl_t>(proc, CSR_MSCRATCHCSWL);
   }
 
   serialized = false;

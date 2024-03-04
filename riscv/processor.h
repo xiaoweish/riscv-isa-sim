@@ -111,6 +111,7 @@ struct state_t
   csr_t_p stvec;
   virtualized_csr_t_p satp;
   csr_t_p scause;
+  csr_t_p mtvt;
 
   // When taking a trap into HS-mode, we must access the nonvirtualized HS-mode CSRs directly:
   csr_t_p nonvirtual_stvec;
@@ -351,6 +352,7 @@ private:
 
   friend class mmu_t;
   friend class clint_t;
+  friend class clic_t;
   friend class plic_t;
   friend class extension_t;
 

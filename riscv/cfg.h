@@ -77,6 +77,7 @@ public:
   std::vector<size_t>     hartids;
   bool                    explicit_hartids;
   bool                    real_time_clint;
+  bool                    real_time_clic;
   reg_t                   trigger_count;
 
   size_t nprocs() const { return hartids.size(); }

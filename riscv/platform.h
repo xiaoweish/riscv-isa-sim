@@ -18,4 +18,23 @@
 #define EXT_IO_BASE        0x40000000
 #define DRAM_BASE          0x80000000
 
+// #define MCLIC_BASE 0x0d000000
+#define MCLIC_BASE 0x0d000000
+#define MCLIC_SIZE 0x04000000
+// 2-4096 that specifies the actual number of maximum interrupt inputs supported in this implementation. MSIP, MTIP are always included.
+#define MCLIC_NUM_INTERRUPT 64
+// specifies how many hardware bits are actually implemented in the clicintctl registers, with 0 ≤ MCLIC_INTCTLBITS ≤ 8
+#define MCLIC_INTCTLBITS 4
+// specifies the number of maximum interrupt triggers supported in this implementation. Valid values are 0 to 32.
+#define MCLIC_NUM_TRIGGER 16
+
+#define MCLIC_ANDBASIC                           0  // 0 - CLIC only, 1 Implements CLINT mode also
+#define MCLIC_PRIVMODES                          1  // 1-3 Number privilege modes: 1=M, 2=M/U, 3=M/S/U
+#define MCLIC_LEVELS                            16  // 2-256 Number of interrupt levels including 0
+#define MCLIC_MAXID          MCLIC_NUM_INTERRUPT-1  // 12-4095 Largest interrupt ID
+#define MCLIC_INTTHRESHBITS                      8  // 1-8 Number of bits implemented in {intthresh}.th
+#define MCLIC_CFGMBITS                           0  // 0-ceil(lg2(CLICPRIVMODES)) Number of bits implemented for cliccfg.nmbits
+#define MCLIC_CFGLBITS                           4  // 0-ceil(lg2(CLICLEVELS)) Number of bits implemented for cliccfg.nlbits
+#define MCLIC_MTVECALIGN                         6  // >= 6 Number of hardwired-zero least significant bits in mtvec address
+
 #endif

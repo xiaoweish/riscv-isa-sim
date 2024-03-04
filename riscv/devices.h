@@ -86,6 +86,61 @@ class clint_t : public abstract_device_t {
   std::map<size_t, mtimecmp_t> mtimecmp;
 };
 
+class clic_t : public abstract_device_t {
+ public:
+  clic_t(const simif_t*, uint64_t freq_hz, bool real_time);
+  bool load(reg_t addr, size_t len, uint8_t* bytes) override;
+  bool store(reg_t addr, size_t len, const uint8_t* bytes) override;
+  size_t size() { return MCLIC_SIZE; }
+  void tick(reg_t rtc_ticks) override;
+  uint64_t get_mtimecmp(reg_t hartid) { return mtimecmp[hartid]; }
+  uint64_t get_mtime() { return mtime; }
+ private:
+  typedef uint64_t mtime_t;
+  typedef uint64_t mtimecmp_t;
+  typedef uint32_t msip_t;
+  const simif_t* sim;
+  uint64_t freq_hz;
+  bool real_time;
+  uint64_t real_time_ref_secs;
+  uint64_t real_time_ref_usecs;
+  mtime_t mtime;
+  std::map<size_t, mtimecmp_t> mtimecmp;
+
+  union clicinttrig_union
+  {
+    struct {
+        unsigned int interrupt_number : 13;
+        unsigned int reserved_warl : 18;
+        unsigned int enable : 1;
+    };
+    unsigned int all;
+  };
+
+  typedef union clicinttrig_union CLICINTTRIG_UNION_T;
+
+  union clicintattr_union
+  {
+    struct {
+      uint8_t reserved_warl : 1;
+      uint8_t trig : 2;
+      uint8_t reserved_wpri : 3;
+      uint8_t mode : 2;
+    };
+    uint8_t all;
+  };
+
+  typedef union clicintattr_union CLICINTATTR_UNION_T;
+  
+  CLICINTTRIG_UNION_T clicinttrig[MCLIC_NUM_TRIGGER]   {0};
+  uint8_t             clicintip[MCLIC_NUM_INTERRUPT]   {0};
+  uint8_t             clicintie[MCLIC_NUM_INTERRUPT]   {0};
+  CLICINTATTR_UNION_T clicintattr[MCLIC_NUM_INTERRUPT] {0};
+  uint8_t  clicintctl[MCLIC_NUM_INTERRUPT]  {0};
+
+
+};
+
 #define PLIC_MAX_DEVICES 1024
 
 struct plic_context_t {

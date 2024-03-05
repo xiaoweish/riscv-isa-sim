@@ -129,6 +129,7 @@ struct state_t
   csr_t_p htval;
   csr_t_p htinst;
   csr_t_p hgatp;
+  hvip_csr_t_p hvip;
   sstatus_csr_t_p sstatus;
   vsstatus_csr_t_p vsstatus;
   csr_t_p vstvec;
@@ -170,6 +171,8 @@ struct state_t
 
   csr_t_p stimecmp;
   csr_t_p vstimecmp;
+
+  csr_t_p srmcfg;
 
   bool serialized; // whether timer CSRs are in a well-defined state
 

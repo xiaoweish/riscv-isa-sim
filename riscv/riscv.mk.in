@@ -44,6 +44,7 @@ riscv_install_hdrs = \
 	trap.h \
 	triggers.h \
 	vector_unit.h \
+	clic.h \
 
 riscv_precompiled_hdrs = \
 	insn_template.h \
@@ -70,6 +71,7 @@ riscv_srcs = \
 	csrs.cc \
 	triggers.cc \
 	vector_unit.cc \
+	clic.cc \
 	socketif.cc \
 	cfg.cc \
 	$(riscv_gen_srcs) \

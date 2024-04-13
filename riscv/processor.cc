@@ -41,6 +41,11 @@ processor_t::processor_t(const isa_parser_t *isa, const cfg_t *cfg,
 {
   VU.p = this;
   TM.proc = this;
+  if (extension_enabled(EXT_SMCLIC)) {
+    CLIC.p = this;
+    CLIC.sim = sim;
+  }
+  
 
 #ifndef HAVE_INT128
   if (isa->extension_enabled('V')) {
@@ -617,6 +622,9 @@ void processor_t::reset()
   state.dcsr->halt = halt_on_reset;
   halt_on_reset = false;
   VU.reset();
+  if (extension_enabled(EXT_SMCLIC)) {
+    CLIC.reset();
+  }
   in_wfi = false;
 
   if (n_pmp > 0) {
@@ -830,6 +838,15 @@ void processor_t::debug_output_log(std::stringstream *s)
 
 void processor_t::take_trap(trap_t& t, reg_t epc)
 {
+
+  if ((state.mtvec->read() & (reg_t)0x3F) == (reg_t)0x03)
+  //if (extension_enabled(EXT_SMCLIC))
+  {
+    CLIC.take_clic_trap(t,epc);
+    return;
+  }
+  
+
   unsigned max_xlen = isa->get_max_xlen();
 
   if (debug) {

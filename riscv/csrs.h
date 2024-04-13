@@ -861,4 +861,73 @@ class hvip_csr_t : public basic_csr_t {
 };
 
 typedef std::shared_ptr<hvip_csr_t> hvip_csr_t_p;
+
+class tvt_t: public basic_csr_t {
+  public:
+    tvt_t(processor_t* const proc, const reg_t addr);
+    virtual void verify_permissions(insn_t insn, bool write) const override;
+    virtual reg_t read() const noexcept override;
+  protected:
+    virtual bool unlogged_write(const reg_t val) noexcept override;
+};
+
+class nxti_t: public csr_t {
+  public:
+    nxti_t(processor_t* const proc, const reg_t addr);
+    virtual void verify_permissions(insn_t insn, bool write) const override;
+    virtual reg_t read() const noexcept override;
+    uint64_t verify_pemission_rs1; // value of instruction rs1 of last verify permission with write active
+  protected:
+    virtual bool unlogged_write(const reg_t val) noexcept override;
+  private:
+    reg_t val;
+};
+
+class intstatus_t: public basic_csr_t {
+  public:
+    intstatus_t(processor_t* const proc, const reg_t addr);
+    virtual void verify_permissions(insn_t insn, bool write) const override;
+    virtual reg_t read() const noexcept override;
+};
+
+class intthresh_t: public basic_csr_t {
+  public:
+    intthresh_t(processor_t* const proc, const reg_t addr);
+    virtual void verify_permissions(insn_t insn, bool write) const override;
+    virtual reg_t read() const noexcept override;
+  protected:
+    virtual bool unlogged_write(const reg_t val) noexcept override;
+};
+
+class scratchcsw_t: public csr_t {
+  public:
+    scratchcsw_t(processor_t* const proc, const reg_t addr);
+    virtual void verify_permissions(insn_t insn, bool write) const override;
+    virtual reg_t read() const noexcept override;
+    uint64_t verify_pemission_rs1; // value of instruction rs1 of last verify permission with write active
+  protected:
+    virtual bool unlogged_write(const reg_t val) noexcept override;
+  private:
+    reg_t val;
+};
+
+class scratchcswl_t: public csr_t {
+  public:
+    scratchcswl_t(processor_t* const proc, const reg_t addr);
+    virtual void verify_permissions(insn_t insn, bool write) const override;
+    virtual reg_t read() const noexcept override;
+    uint64_t verify_pemission_rs1; // value of instruction rs1 of last verify permission with write active
+  protected:
+    virtual bool unlogged_write(const reg_t val) noexcept override;
+  private:
+    reg_t val;
+};
+
+class mcause_csr_t: public basic_csr_t {
+ public:
+  mcause_csr_t(processor_t* const proc, const reg_t addr);
+
+  virtual reg_t read() const noexcept override;
+};
+
 #endif

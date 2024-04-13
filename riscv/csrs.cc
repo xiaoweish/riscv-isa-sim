@@ -374,7 +374,13 @@ reg_t tvec_csr_t::read() const noexcept {
 }
 
 bool tvec_csr_t::unlogged_write(const reg_t val) noexcept {
-  this->val = val & ~(reg_t)2;
+  if (proc->extension_enabled(EXT_SMCLIC)) {
+    this->val = val & ~(reg_t)60; // mask out bits 5:2 to be zero only
+  }
+  else {
+    this->val = val & ~(reg_t)2;
+  }
+  
   return true;
 }
 
@@ -1735,4 +1741,144 @@ reg_t hvip_csr_t::read() const noexcept {
 bool hvip_csr_t::unlogged_write(const reg_t val) noexcept {
   state->mip->write_with_mask(MIP_VSSIP, val); // hvip.VSSIP is an alias of mip.VSSIP
   return basic_csr_t::unlogged_write(val & (MIP_VSEIP | MIP_VSTIP));
+}
+
+nxti_t::nxti_t(processor_t* const proc, const reg_t addr):
+  csr_t(proc, addr),
+  val(0) {
+  }
+void nxti_t::verify_permissions(insn_t insn, bool write) const {
+  csr_t::verify_permissions(insn, write);
+  if(!proc->extension_enabled(EXT_SMCLIC))
+    throw trap_illegal_instruction(insn.bits());
+  uint64_t(verify_pemission_rs1) = uint64_t(insn.rs1());
+}
+reg_t nxti_t::read() const noexcept {
+  // fixme need to add trap handler entry
+  return val;
+}
+bool nxti_t::unlogged_write(const reg_t val) noexcept {
+  const reg_t new_mstatus = proc->get_state()->mstatus->read() | (val & 0x1F);
+  state->mstatus->write(new_mstatus);
+  // fixme need to adde side effects, also checks on (rs1 != 0), and (rs1 != x0)
+  this->val = val;
+  return true;
+}
+
+// implement class tvt_t
+tvt_t::tvt_t(processor_t* const proc, const reg_t addr):
+  basic_csr_t(proc, addr, 0) {
+  }
+
+reg_t tvt_t::read() const noexcept {
+  reg_t val = basic_csr_t::read();
+  return val;
+}
+
+void tvt_t::verify_permissions(insn_t insn, bool write) const {
+  basic_csr_t::verify_permissions(insn, write);
+  if (!proc->extension_enabled(EXT_SMCLIC))
+    throw trap_illegal_instruction(insn.bits());
+}
+
+bool tvt_t::unlogged_write(const reg_t val) noexcept {
+  return basic_csr_t::unlogged_write(val & ~(reg_t)0x3F);
+}
+
+// implement class intstatus_t
+intstatus_t::intstatus_t(processor_t* const proc, const reg_t addr):
+  basic_csr_t(proc, addr, 0) {
+  }
+
+reg_t intstatus_t::read() const noexcept {
+  reg_t val = basic_csr_t::read();
+  return val; // fixme, this should return MINTSTATUS_MIL, MINTSTATUS_SIL, MINTSTATUS_UIL
+}
+
+void intstatus_t::verify_permissions(insn_t insn, bool write) const {
+  basic_csr_t::verify_permissions(insn, write);
+  if (!proc->extension_enabled(EXT_SMCLIC))
+    throw trap_illegal_instruction(insn.bits());
+}
+
+// implement class intthresh_t
+intthresh_t::intthresh_t(processor_t* const proc, const reg_t addr):
+  basic_csr_t(proc, addr, 0) {
+  }
+
+reg_t intthresh_t::read() const noexcept {
+  reg_t val = basic_csr_t::read();
+  return val;
+}
+
+void intthresh_t::verify_permissions(insn_t insn, bool write) const {
+  basic_csr_t::verify_permissions(insn, write);
+  if (!proc->extension_enabled(EXT_SMCLIC))
+    throw trap_illegal_instruction(insn.bits());
+}
+
+bool intthresh_t::unlogged_write(const reg_t val) noexcept {
+  return basic_csr_t::unlogged_write(val & reg_t(MINTTHRESH_TH));
+}
+
+// implemnt class scratchcsw_t
+scratchcsw_t::scratchcsw_t(processor_t* const proc, const reg_t addr):
+  csr_t(proc, addr),
+  val(0) {
+  }
+void scratchcsw_t::verify_permissions(insn_t insn, bool write) const {
+  csr_t::verify_permissions(insn, write);
+  if(!proc->extension_enabled(EXT_SMCLIC))
+    throw trap_illegal_instruction(insn.bits());
+  uint64_t(verify_pemission_rs1) = uint64_t(insn.rs1());
+}
+reg_t scratchcsw_t::read() const noexcept {
+  // fixme are reads illegal ?
+  return val;
+}
+bool scratchcsw_t::unlogged_write(const reg_t val) noexcept {
+  // fixme need to add side effects, also checks on (rd != 0), and (rs1 != x0)
+  this->val = val;
+  return true;
+}
+
+// implemnt class scratchcswl_t
+scratchcswl_t::scratchcswl_t(processor_t* const proc, const reg_t addr):
+  csr_t(proc, addr),
+  val(0) {
+  }
+void scratchcswl_t::verify_permissions(insn_t insn, bool write) const {
+  csr_t::verify_permissions(insn, write);
+  if(!proc->extension_enabled(EXT_SMCLIC))
+    throw trap_illegal_instruction(insn.bits());
+  uint64_t(verify_pemission_rs1) = uint64_t(insn.rs1());
+}
+reg_t scratchcswl_t::read() const noexcept {
+  // fixme are reads illegal ?
+  return val;
+}
+bool scratchcswl_t::unlogged_write(const reg_t val) noexcept {
+  // fixme need to add side effects, also checks on (rd != 0), and (rs1 != x0)
+  this->val = val;
+  return true;
+}
+
+mcause_csr_t::mcause_csr_t(processor_t* const proc, const reg_t addr):
+  basic_csr_t(proc, addr, 0) {
+}
+
+reg_t mcause_csr_t::read() const noexcept {
+  reg_t val = basic_csr_t::read();
+  // When reading, the interrupt bit needs to adjust to xlen. Spike does
+  // not generally support dynamic xlen, but this code was (partly)
+  // there since at least 2015 (ea58df8 and c4350ef).
+  if (proc->get_isa().get_max_xlen() > proc->get_xlen()) {// Move interrupt bit to top of xlen
+    val =  val | ((val >> (proc->get_isa().get_max_xlen()-1)) << (proc->get_xlen()-1));
+  }
+  if (proc->extension_enabled(EXT_SMCLIC)) {
+    reg_t mstatus_val = proc->get_state()->mstatus->read();
+    val = set_field(val, MCAUSE_MPP, get_field(mstatus_val, MSTATUS_MPP));
+    val = set_field(val, MCAUSE_MPIE, get_field(mstatus_val, MSTATUS_MPIE));
+  }
+  return val;
 }

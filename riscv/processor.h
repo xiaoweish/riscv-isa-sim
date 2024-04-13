@@ -17,6 +17,7 @@
 #include "triggers.h"
 #include "../fesvr/memif.h"
 #include "vector_unit.h"
+#include "clic.h"
 
 #define N_HPMCOUNTERS 29
 
@@ -347,7 +348,15 @@ private:
   static const size_t OPCODE_CACHE_SIZE = 8191;
   insn_desc_t opcode_cache[OPCODE_CACHE_SIZE];
 
-  void take_pending_interrupt() { take_interrupt(state.mip->read() & state.mie->read()); }
+  void take_pending_interrupt() {
+    if ((state.mtvec->read() & (reg_t)0x3F) == (reg_t)0x03) {
+      CLIC.take_clic_interrupt();
+    }
+    else {
+      take_interrupt(state.mip->read() & state.mie->read());
+    }
+  }
+
   void take_interrupt(reg_t mask); // take first enabled interrupt in mask
   void take_trap(trap_t& t, reg_t epc); // take an exception
   void take_trigger_action(triggers::action_t action, reg_t breakpoint_tval, reg_t epc, bool virt);
@@ -363,6 +372,7 @@ private:
   friend class clint_t;
   friend class plic_t;
   friend class extension_t;
+  friend class clic_t;
 
   void parse_varch_string(const char*);
   void parse_priv_string(const char*);
@@ -381,6 +391,7 @@ public:
 
   vectorUnit_t VU;
   triggers::module_t TM;
+  clic_t CLIC;
 };
 
 #endif

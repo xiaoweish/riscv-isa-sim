@@ -381,9 +381,13 @@ reg_t tvec_csr_t::read() const noexcept {
 
 bool tvec_csr_t::unlogged_write(const reg_t val) noexcept {
   if (proc->extension_enabled(EXT_SMCLIC)) {
-    this->val = val & ~(reg_t)60; // mask out bits 5:2 to be zero only
-  }
-  else {
+      if ((val & 0x3F) == 0x03) {
+        // CLIC mode is being enabled
+        this->val = val & ~(reg_t)60; // mask out bits 5:2 to be zero only
+      } else {
+        this->val = val & ~(reg_t)2;
+      }
+  } else {
     this->val = val & ~(reg_t)2;
   }
   

@@ -99,6 +99,14 @@ processor_t::~processor_t()
   delete disassembler;
 }
 
+static void zicfilp_check_if_lpad_required(const elp_t elp, insn_t insn)
+{
+  if (unlikely(elp == elp_t::LP_EXPECTED)) {
+    // also see riscv/lpad.h for more checks performed
+    software_check((insn.bits() & MASK_LPAD) == MATCH_LPAD, LANDING_PAD_FAULT);
+  }
+}
+
 static void bad_option_string(const char *option, const char *value,
                               const char *msg)
 {
@@ -379,7 +387,8 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
     (1 << CAUSE_USER_ECALL) |
     (1 << CAUSE_FETCH_PAGE_FAULT) |
     (1 << CAUSE_LOAD_PAGE_FAULT) |
-    (1 << CAUSE_STORE_PAGE_FAULT);
+    (1 << CAUSE_STORE_PAGE_FAULT) |
+    (1 << CAUSE_SOFTWARE_CHECK_FAULT);
   csrmap[CSR_HEDELEG] = hedeleg = std::make_shared<masked_csr_t>(proc, CSR_HEDELEG, hedeleg_mask, 0);
   csrmap[CSR_HCOUNTEREN] = hcounteren = std::make_shared<masked_csr_t>(proc, CSR_HCOUNTEREN, counteren_mask, 0);
   htimedelta = std::make_shared<basic_csr_t>(proc, CSR_HTIMEDELTA, 0);
@@ -413,7 +422,7 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
     csrmap[CSR_TDATA3] = std::make_shared<const_csr_t>(proc, CSR_TDATA3, 0);
     csrmap[CSR_TINFO] = std::make_shared<const_csr_t>(proc, CSR_TINFO, 0);
   }
-  unsigned scontext_length = (xlen == 32 ? 16 : 34); // debug spec suggests 16-bit for RV32 and 34-bit for RV64
+  unsigned scontext_length = (xlen == 32 ? 16 : 32); // debug spec suggests 16-bit for RV32 and 32-bit for RV64
   csrmap[CSR_SCONTEXT] = scontext = std::make_shared<masked_csr_t>(proc, CSR_SCONTEXT, (reg_t(1) << scontext_length) - 1, 0);
   unsigned hcontext_length = (xlen == 32 ? 6 : 13) + (proc->extension_enabled('H') ? 1 : 0); // debug spec suggest 7-bit (6-bit) for RV32 and 14-bit (13-bit) for RV64 with (without) H extension
   csrmap[CSR_HCONTEXT] = std::make_shared<masked_csr_t>(proc, CSR_HCONTEXT, (reg_t(1) << hcontext_length) - 1, 0);
@@ -448,7 +457,8 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
                               (proc->extension_enabled(EXT_ZICBOZ) ? MENVCFG_CBZE : 0) |
                               (proc->extension_enabled(EXT_SVADU) ? MENVCFG_ADUE: 0) |
                               (proc->extension_enabled(EXT_SVPBMT) ? MENVCFG_PBMTE : 0) |
-                              (proc->extension_enabled(EXT_SSTC) ? MENVCFG_STCE : 0);
+                              (proc->extension_enabled(EXT_SSTC) ? MENVCFG_STCE : 0) |
+                              (proc->extension_enabled(EXT_ZICFILP) ? MENVCFG_LPE : 0);
     const reg_t menvcfg_init = (proc->extension_enabled(EXT_SVPBMT) ? MENVCFG_PBMTE : 0);
     menvcfg = std::make_shared<envcfg_csr_t>(proc, CSR_MENVCFG, menvcfg_mask, menvcfg_init);
     if (xlen == 32) {
@@ -458,13 +468,15 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
       csrmap[CSR_MENVCFG] = menvcfg;
     }
     const reg_t senvcfg_mask = (proc->extension_enabled(EXT_ZICBOM) ? SENVCFG_CBCFE | SENVCFG_CBIE : 0) |
-                              (proc->extension_enabled(EXT_ZICBOZ) ? SENVCFG_CBZE : 0);
+                              (proc->extension_enabled(EXT_ZICBOZ) ? SENVCFG_CBZE : 0) |
+                              (proc->extension_enabled(EXT_ZICFILP) ? SENVCFG_LPE : 0);
     csrmap[CSR_SENVCFG] = senvcfg = std::make_shared<senvcfg_csr_t>(proc, CSR_SENVCFG, senvcfg_mask, 0);
     const reg_t henvcfg_mask = (proc->extension_enabled(EXT_ZICBOM) ? HENVCFG_CBCFE | HENVCFG_CBIE : 0) |
                               (proc->extension_enabled(EXT_ZICBOZ) ? HENVCFG_CBZE : 0) |
                               (proc->extension_enabled(EXT_SVADU) ? HENVCFG_ADUE: 0) |
                               (proc->extension_enabled(EXT_SVPBMT) ? HENVCFG_PBMTE : 0) |
-                              (proc->extension_enabled(EXT_SSTC) ? HENVCFG_STCE : 0);
+                              (proc->extension_enabled(EXT_SSTC) ? HENVCFG_STCE : 0) |
+                              (proc->extension_enabled(EXT_ZICFILP) ? HENVCFG_LPE : 0);
     const reg_t henvcfg_init = (proc->extension_enabled(EXT_SVPBMT) ? HENVCFG_PBMTE : 0);
     henvcfg = std::make_shared<henvcfg_csr_t>(proc, CSR_HENVCFG, henvcfg_mask, henvcfg_init, menvcfg);
     if (xlen == 32) {
@@ -595,6 +607,8 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
   last_inst_priv = 0;
   last_inst_xlen = 0;
   last_inst_flen = 0;
+
+  elp = elp_t::NO_LP_EXPECTED;
 }
 
 void processor_t::set_debug(bool value)
@@ -818,8 +832,10 @@ const char* processor_t::get_privilege_string()
 
 void processor_t::enter_debug_mode(uint8_t cause)
 {
+  const bool has_zicfilp = extension_enabled(EXT_ZICFILP);
   state.debug_mode = true;
-  state.dcsr->write_cause_and_prv(cause, state.prv, state.v);
+  state.dcsr->update_fields(cause, state.prv, state.v, state.elp);
+  state.elp = elp_t::NO_LP_EXPECTED;
   set_privilege(PRV_M, false);
   state.dpc->write(state.pc);
   state.pc = DEBUG_ROM_ENTRY;
@@ -897,6 +913,8 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
     s = set_field(s, MSTATUS_SPIE, get_field(s, MSTATUS_SIE));
     s = set_field(s, MSTATUS_SPP, state.prv);
     s = set_field(s, MSTATUS_SIE, 0);
+    s = set_field(s, MSTATUS_SPELP, state.elp);
+    state.elp = elp_t::NO_LP_EXPECTED;
     state.sstatus->write(s);
     set_privilege(PRV_S, true);
   } else if (state.prv <= PRV_S && bit < max_xlen && ((hsdeleg >> bit) & 1)) {
@@ -913,6 +931,8 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
     s = set_field(s, MSTATUS_SPIE, get_field(s, MSTATUS_SIE));
     s = set_field(s, MSTATUS_SPP, state.prv);
     s = set_field(s, MSTATUS_SIE, 0);
+    s = set_field(s, MSTATUS_SPELP, state.elp);
+    state.elp = elp_t::NO_LP_EXPECTED;
     state.nonvirtual_sstatus->write(s);
     if (extension_enabled('H')) {
       s = state.hstatus->read();
@@ -944,6 +964,8 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
     s = set_field(s, MSTATUS_MIE, 0);
     s = set_field(s, MSTATUS_MPV, curr_virt);
     s = set_field(s, MSTATUS_GVA, t.has_gva());
+    s = set_field(s, MSTATUS_MPELP, state.elp);
+    state.elp = elp_t::NO_LP_EXPECTED;
     state.mstatus->write(s);
     if (state.mstatush) state.mstatush->write(s >> 32);  // log mstatush change
     set_privilege(PRV_M, false);
@@ -976,6 +998,13 @@ void processor_t::take_trigger_action(triggers::action_t action, reg_t breakpoin
 const char* processor_t::get_symbol(uint64_t addr)
 {
   return sim->get_symbol(addr);
+}
+
+void processor_t::execute_insn_prehook(insn_t insn)
+{
+  if (extension_enabled(EXT_ZICFILP)) {
+    zicfilp_check_if_lpad_required(state.elp, insn);
+  }
 }
 
 void processor_t::disasm(insn_t insn)

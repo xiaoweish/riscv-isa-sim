@@ -877,6 +877,7 @@ class tvt_t: public basic_csr_t {
     tvt_t(processor_t* const proc, const reg_t addr);
     virtual void verify_permissions(insn_t insn, bool write) const override;
     virtual reg_t read() const noexcept override;
+    mutable insn_bits_t insn_bits; // value of instruction
   protected:
     virtual bool unlogged_write(const reg_t val) noexcept override;
 };
@@ -886,11 +887,11 @@ class nxti_t: public csr_t {
     nxti_t(processor_t* const proc, const reg_t addr);
     virtual void verify_permissions(insn_t insn, bool write) const override;
     virtual reg_t read() const noexcept override;
-    uint64_t verify_pemission_rs1; // value of instruction rs1 of last verify permission with write active
   protected:
     virtual bool unlogged_write(const reg_t val) noexcept override;
   private:
     reg_t val;
+    mutable insn_bits_t insn_bits; // value of instruction
 };
 
 class intstatus_t: public basic_csr_t {
@@ -914,11 +915,12 @@ class scratchcsw_t: public csr_t {
     scratchcsw_t(processor_t* const proc, const reg_t addr);
     virtual void verify_permissions(insn_t insn, bool write) const override;
     virtual reg_t read() const noexcept override;
-    uint64_t verify_pemission_rs1; // value of instruction rs1 of last verify permission with write active
   protected:
     virtual bool unlogged_write(const reg_t val) noexcept override;
   private:
     reg_t val;
+    mutable insn_bits_t insn_bits; // value of instruction
+    mutable reg_t rd_val;
 };
 
 class scratchcswl_t: public csr_t {
@@ -926,11 +928,12 @@ class scratchcswl_t: public csr_t {
     scratchcswl_t(processor_t* const proc, const reg_t addr);
     virtual void verify_permissions(insn_t insn, bool write) const override;
     virtual reg_t read() const noexcept override;
-    uint64_t verify_pemission_rs1; // value of instruction rs1 of last verify permission with write active
   protected:
     virtual bool unlogged_write(const reg_t val) noexcept override;
   private:
     reg_t val;
+    mutable insn_bits_t insn_bits; // value of instruction
+    mutable reg_t rd_val;
 };
 
 class mcause_csr_t: public basic_csr_t {

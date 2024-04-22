@@ -216,6 +216,24 @@ if (len > 8) {
   return true;
 }
 
+void clic_t::update_clic_nint() {
+  // perform search for higest ranked interrupt in CLIC;
+  uint16_t int_selected = 0;
+  clic_npriv  = PRV_U;
+  clic_nlevel = 0;
+  clic_id     = 0;
+
+  for (int indx = 0; indx < CLIC_NUM_INTERRUPT; indx++) {
+    if (((clicintattr[indx].mode << 8) | clicintctl[indx]) >= int_selected)
+    {
+      int_selected = ((clicintattr[indx].mode << 8) | clicintctl[indx]);
+      clic_npriv  = clicintattr[indx].mode;
+      clic_nlevel = clicintctl[indx];
+      clic_id     = indx;
+    }
+  }
+};
+
 void clic_t::take_clic_interrupt() {
     state_t* state;
     state = p->get_state();
@@ -238,20 +256,7 @@ void clic_t::take_clic_interrupt() {
 // interrupt-level threshold of the associated privilege mode to determine whether it is qualified or masked by the
 // threshold (and thus no interrupt is presented).
 
-  uint16_t int_selected = 0;
-  clic_npriv  = PRV_U;
-  clic_nlevel = 0;
-  clic_id     = 0;
-
-  for (int indx = 0; indx < CLIC_NUM_INTERRUPT; indx++) {
-    if (((clicintattr[indx].mode << 8) | clicintctl[indx]) >= int_selected)
-    {
-      int_selected = ((clicintattr[indx].mode << 8) | clicintctl[indx]);
-      clic_npriv  = clicintattr[indx].mode;
-      clic_nlevel = clicintctl[indx];
-      clic_id     = indx;
-    }
-  }
+  update_clic_nint();
 
   if ((clic_nlevel == 0) )
   {
@@ -350,8 +355,12 @@ void clic_t::take_clic_trap(trap_t& t, reg_t epc) {  // fixme - Implementation f
   
   p->state.mepc->write(epc);
   
+  prev_priv = curr_priv;
+  prev_ie   = curr_ie;
+  prev_level = curr_level;
+
   reg_t cause = t.cause();
-  cause = set_field(cause,MCAUSE_MPP,p->state.prv);
+  cause = set_field(cause,MCAUSE_MPP,prev_priv);
   cause = set_field(cause,MCAUSE_MPIE,prev_ie);
   cause = set_field(cause,MCAUSE_MPIL, prev_level);
   p->state.mcause->write(cause);
@@ -361,15 +370,17 @@ void clic_t::take_clic_trap(trap_t& t, reg_t epc) {  // fixme - Implementation f
 
   p->state.mtinst->write(t.get_tinst());
 
-    reg_t s = p->state.mstatus->read();
-    s = set_field(s, MSTATUS_MPIE, prev_ie);
-    s = set_field(s, MSTATUS_MPP, p->state.prv);
-    s = set_field(s, MSTATUS_MIE, 0);
-    s = set_field(s, MSTATUS_MPV, curr_virt);
-    s = set_field(s, MSTATUS_GVA, t.has_gva());
-    p->state.mstatus->write(s);
-    if (p->state.mstatush) p->state.mstatush->write(s >> 32);  // log mstatush change
-    p->set_privilege(PRV_M, false);
+  reg_t s = p->state.mstatus->read();
+  s = set_field(s, MSTATUS_MPIE, prev_ie);
+  s = set_field(s, MSTATUS_MPP, prev_priv);
+  s = set_field(s, MSTATUS_MIE, 0);
+  s = set_field(s, MSTATUS_MPV, curr_virt);
+  s = set_field(s, MSTATUS_GVA, t.has_gva());
+  s = set_field(s, MSTATUS_MPELP, p->state.elp);
+  p->state.elp = elp_t::NO_LP_EXPECTED;
+  p->state.mstatus->write(s);
+  if (p->state.mstatush) p->state.mstatush->write(s >> 32);  // log mstatush change
+  p->set_privilege(PRV_M, false);
 
 }
 
@@ -381,7 +392,7 @@ void clic_t::reset() {
   csrmap[CSR_MINTTHRESH] = std::make_shared<intthresh_t>(p, CSR_MINTTHRESH);
   csrmap[CSR_MSCRATCHCSW] = std::make_shared<scratchcsw_t>(p, CSR_MSCRATCHCSW);
   csrmap[CSR_MSCRATCHCSWL] = std::make_shared<scratchcswl_t>(p, CSR_MSCRATCHCSWL);
-  csrmap[CSR_MCAUSE] = p->state.mcause = std::make_shared<cause_csr_t>(p,CSR_MCAUSE);
+  csrmap[CSR_MCAUSE] = p->state.mcause = std::make_shared<mcause_csr_t>(p,CSR_MCAUSE);
 
   reg_t mintstatus = csrmap[CSR_MINTSTATUS]->read();
   mintstatus = mintstatus & ~MINTSTATUS_MIL;

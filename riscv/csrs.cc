@@ -20,6 +20,7 @@
 #undef STATE
 #define STATE (*state)
 
+
 // implement class csr_t
 csr_t::csr_t(processor_t* const proc, const reg_t addr):
   proc(proc),
@@ -730,7 +731,11 @@ mip_or_mie_csr_t::mip_or_mie_csr_t(processor_t* const proc, const reg_t addr):
 }
 
 reg_t mip_or_mie_csr_t::read() const noexcept {
-  return val;
+  if ((state->csrmap[CSR_MTVEC]->read() & (reg_t)0x3F) == (reg_t)0x03) {
+    return 0;
+  } else {
+    return val;
+  }
 }
 
 void mip_or_mie_csr_t::write_with_mask(const reg_t mask, const reg_t val) noexcept {
@@ -748,7 +753,11 @@ mip_csr_t::mip_csr_t(processor_t* const proc, const reg_t addr):
 }
 
 reg_t mip_csr_t::read() const noexcept {
-  return val | state->hvip->basic_csr_t::read();
+  if ((state->csrmap[CSR_MTVEC]->read() & (reg_t)0x3F) == (reg_t)0x03) {
+    return 0;
+  } else {
+    return val | state->hvip->basic_csr_t::read();
+  }
 }
 
 void mip_csr_t::backdoor_write_with_mask(const reg_t mask, const reg_t val) noexcept {
@@ -1770,23 +1779,115 @@ bool hvip_csr_t::unlogged_write(const reg_t val) noexcept {
 
 nxti_t::nxti_t(processor_t* const proc, const reg_t addr):
   csr_t(proc, addr),
-  val(0) {
+  val(0),
+  insn_bits(0) {
   }
+
 void nxti_t::verify_permissions(insn_t insn, bool write) const {
   csr_t::verify_permissions(insn, write);
+
   if(!proc->extension_enabled(EXT_SMCLIC))
     throw trap_illegal_instruction(insn.bits());
-  uint64_t(verify_pemission_rs1) = uint64_t(insn.rs1());
+  
+  // These CSRs are only designed to be used with the CSRR (CSRRS rd,csr,x0), CSRRSI/CSRRS, and CSRRCI instructions
+  // Accessing the xnxti CSR using any other CSR instruction form (CSRRW/CSRRC/CSRRWI) is reserved.
+  // Note: Use of xnxti with CSRRSI with non-zero uimm values for bits 0, 2, and 4 are reserved for future use.
+  bool csr_access_invalid = (((insn.bits() &  CSRR_FUNC3_MASK) == CSRRW_FUNC3_VAL) || // CSRRW
+                             ((insn.bits() &  CSRR_FUNC3_MASK) == CSRRC_FUNC3_VAL) || // CSRRC
+                             ((insn.bits() &  CSRR_FUNC3_MASK) == CSRRWI_FUNC3_VAL));  // CSRRWI
+
+  if (((state->csrmap[CSR_MTVEC]->read() & (reg_t)0x3F) == (reg_t)0x03) && csr_access_invalid) {
+    throw trap_illegal_instruction(insn.bits());
+  }
+
+  insn_bits = insn.bits();
 }
 reg_t nxti_t::read() const noexcept {
-  // fixme need to add trap handler entry
-  return val;
+  proc->CLIC.update_clic_nint();
+  if (((state->mtvec->read() & (reg_t)0x3F) == (reg_t)0x03) &&
+      (proc->CLIC.clic_npriv == PRV_M) &&
+      (proc->CLIC.clic_nlevel > get_field(state->csrmap[CSR_MCAUSE]->read(),MCAUSE_MPIL)) &&
+      (proc->CLIC.clic_nlevel > get_field(state->csrmap[CSR_MINTTHRESH]->read(),MINTTHRESH_TH))
+     )
+  {
+    return ((state->csrmap[CSR_MTVT]->read()) + (proc->get_xlen()/8) * proc->CLIC.clic_id); // rd = TBASE + XLEN/8 * clic.id
+  } else {
+    return 0;
+  }
 }
 bool nxti_t::unlogged_write(const reg_t val) noexcept {
-  const reg_t new_mstatus = proc->get_state()->mstatus->read() | (val & 0x1F);
-  state->mstatus->write(new_mstatus);
-  // fixme need to adde side effects, also checks on (rs1 != 0), and (rs1 != x0)
-  this->val = val;
+  
+  reg_t new_mstatus = state->mstatus->read();
+  reg_t new_mintstatus = state->csrmap[CSR_MINTSTATUS]->read();
+  reg_t new_mcause = state->csrmap[CSR_MCAUSE]->read();
+
+  bool csrrsi_valid = ((insn_bits & CSRR_FUNC3_MASK) != CSRRSI_FUNC3_VAL);
+  bool csrrci_valid = ((insn_bits & CSRR_FUNC3_MASK) != CSRRCI_FUNC3_VAL);
+  uint64_t uimm  = ((insn_bits & CSRR_RS1_MASK) >> 15);
+  
+  if ((state->csrmap[CSR_MTVEC]->read() & (reg_t)0x3F) == (reg_t)0x03) {
+    proc->CLIC.update_clic_nint();
+    if (csrrsi_valid || csrrci_valid) {  // set/clear immediate
+      new_mstatus |= uimm;
+      state->csrmap[CSR_MSTATUS]->write(new_mstatus); 
+      if (
+          (proc->CLIC.clic_npriv == PRV_M) &&
+          (proc->CLIC.clic_nlevel > get_field(state->csrmap[CSR_MCAUSE]->read(),MCAUSE_MPIL)) &&
+          (proc->CLIC.clic_nlevel > get_field(state->csrmap[CSR_MINTTHRESH]->read(),MINTTHRESH_TH))
+         ) {
+        if (uimm != 0) {
+          set_field(new_mintstatus,MINTSTATUS_MIL,proc->CLIC.clic_nlevel);
+          state->csrmap[CSR_MINTSTATUS]->write(new_mintstatus);
+          set_field(new_mcause,MCAUSE_EXCCODE,proc->CLIC.clic_id);
+          if (proc->get_xlen() > 32)
+          {
+            set_field(new_mcause,MCAUSE64_INT,1);
+          } else {
+            set_field(new_mcause,MCAUSE_INT,1);
+          }
+          state->csrmap[CSR_MCAUSE]->write(new_mcause);
+          if ((proc->CLIC.clicintattr[proc->CLIC.clic_id].trig & 1) == 1)
+          {
+            proc->CLIC.clicintip[proc->CLIC.clic_id] = 0;
+          }
+          
+        }
+      }
+      this->val = ((state->csrmap[CSR_MTVT]->read()) + (proc->get_xlen()/8) * proc->CLIC.clic_id); // rd = TBASE + XLEN/8 * clic.id
+      return true;
+    } else { // csrrs (i.e. not immediate)
+      if ((insn_bits & CSRR_RS1_MASK) != 0) {
+        new_mstatus |= (val & 0x1F);
+        state->csrmap[CSR_MSTATUS]->write(new_mstatus);
+      }
+      if (
+          (proc->CLIC.clic_npriv == PRV_M) &&
+          (proc->CLIC.clic_nlevel > get_field(val,MCAUSE_MPIL)) &&
+          (proc->CLIC.clic_nlevel > get_field(state->csrmap[CSR_MINTTHRESH]->read(),MINTTHRESH_TH))
+         ) {
+        if (((val & 0x1F) != 0) && ((insn_bits & CSRR_RS1_MASK) != 0)){
+          set_field(new_mintstatus,MINTSTATUS_MIL,proc->CLIC.clic_nlevel);
+          state->csrmap[CSR_MINTSTATUS]->write(new_mintstatus);
+          set_field(new_mcause,MCAUSE_EXCCODE,proc->CLIC.clic_id);
+          if (proc->get_xlen() > 32)
+          {
+            set_field(new_mcause,MCAUSE64_INT,1);
+          } else {
+            set_field(new_mcause,MCAUSE_INT,1);
+          }
+          state->csrmap[CSR_MCAUSE]->write(new_mcause);
+          if ((proc->CLIC.clicintattr[proc->CLIC.clic_id].trig & 1) == 1)
+          {
+            proc->CLIC.clicintip[proc->CLIC.clic_id] = 0;
+          }
+          
+        }
+      }
+      this->val = ((state->csrmap[CSR_MTVT]->read()) + (proc->get_xlen()/8) * proc->CLIC.clic_id); // rd = TBASE + XLEN/8 * clic.id
+      return true;
+    }
+  }
+  this->val = 0;
   return true;
 }
 
@@ -1797,17 +1898,30 @@ tvt_t::tvt_t(processor_t* const proc, const reg_t addr):
 
 reg_t tvt_t::read() const noexcept {
   reg_t val = basic_csr_t::read();
+  std::cout << "SEAGATE debug : read mtvt opcode = 0x" << std::hex << std::setfill('0') << std::setw(8)  << (insn_bits & CSRR_OPCODE_MASK) << std::endl;
+  std::cout << "SEAGATE debug : read mtvt funct3 = 0x" << std::hex << std::setfill('0') << std::setw(8)  << ((insn_bits & CSRR_FUNC3_MASK) >> 12) << std::endl;
+  std::cout << "SEAGATE debug : read mtvt    rs1 = 0x" << std::hex << std::setfill('0') << std::setw(8)  << ((insn_bits & CSRR_RS1_MASK) >> 15) << std::endl;
+  std::cout << "SEAGATE debug : read mtvt    val = 0x" << std::hex << std::setfill('0') << std::setw(8)  << val << std::endl;
   return val;
 }
-
+ 
 void tvt_t::verify_permissions(insn_t insn, bool write) const {
   basic_csr_t::verify_permissions(insn, write);
+  std::cout << "SEAGATE debug : verify permissions mtvt opcode = 0x" << std::hex << std::setfill('0') << std::setw(8)  << (insn.bits() & CSRR_OPCODE_MASK) << std::endl;
+  std::cout << "SEAGATE debug : verify permissions mtvt funct3 = 0x" << std::hex << std::setfill('0') << std::setw(8)  << (insn.rm()) << std::endl;
+  std::cout << "SEAGATE debug : verify permissions mtvt    rs1 = 0x" << std::hex << std::setfill('0') << std::setw(8)  << (insn.rs1()) << std::endl;
   if (!proc->extension_enabled(EXT_SMCLIC))
     throw trap_illegal_instruction(insn.bits());
+  insn_bits = insn.bits();
 }
 
 bool tvt_t::unlogged_write(const reg_t val) noexcept {
-  return basic_csr_t::unlogged_write(val & ~(reg_t)0x3F);
+  std::cout << "SEAGATE debug : write mtvt opcode = 0x" << std::hex << std::setfill('0') << std::setw(8)  << (insn_bits & CSRR_OPCODE_MASK) << std::endl;
+  std::cout << "SEAGATE debug : write mtvt funct3 = 0x" << std::hex << std::setfill('0') << std::setw(8)  << ((insn_bits & CSRR_FUNC3_MASK) >> 12) << std::endl;
+  std::cout << "SEAGATE debug : write mtvt    rs1 = 0x" << std::hex << std::setfill('0') << std::setw(8)  << ((insn_bits & CSRR_RS1_MASK) >> 15) << std::endl;
+  std::cout << "SEAGATE debug : write mtvt    val = 0x" << std::hex << std::setfill('0') << std::setw(8)  << val << std::endl;
+//  return basic_csr_t::unlogged_write(val & ~(reg_t)0x3F);
+  return basic_csr_t::unlogged_write(val);
 }
 
 // implement class intstatus_t
@@ -1816,8 +1930,10 @@ intstatus_t::intstatus_t(processor_t* const proc, const reg_t addr):
   }
 
 reg_t intstatus_t::read() const noexcept {
-  reg_t val = basic_csr_t::read();
-  return val; // fixme, this should return MINTSTATUS_MIL, MINTSTATUS_SIL, MINTSTATUS_UIL
+  reg_t val = 0;
+  val = (proc->CLIC.curr_level << 24);  // smclic
+  // add additional values for sil and uil when implemented
+  return val;
 }
 
 void intstatus_t::verify_permissions(insn_t insn, bool write) const {
@@ -1849,42 +1965,77 @@ bool intthresh_t::unlogged_write(const reg_t val) noexcept {
 // implemnt class scratchcsw_t
 scratchcsw_t::scratchcsw_t(processor_t* const proc, const reg_t addr):
   csr_t(proc, addr),
-  val(0) {
+  val(0),
+  insn_bits(0),
+  rd_val(0) {
   }
+
 void scratchcsw_t::verify_permissions(insn_t insn, bool write) const {
   csr_t::verify_permissions(insn, write);
+  insn_bits = insn.bits();
   if(!proc->extension_enabled(EXT_SMCLIC))
     throw trap_illegal_instruction(insn.bits());
-  uint64_t(verify_pemission_rs1) = uint64_t(insn.rs1());
+  // These CSRs are only designed to be used with the csrrw instruction with neither rd nor rs1 set to x0.
+  // Accessing the xscratchcsw register with the csrrw instruction with either rd or rs1 set to x0, or using any other CSR instruction form (CSRRWI/CSRRS/CSRRC/CSRRSI/CSRRCI), is reserved.
+  bool csrrw_valid = (((insn_bits & CSRR_OPCODE_MASK) == CSRR_OPCODE_VAL) &&
+                      ((insn_bits & CSRR_FUNC3_MASK)  == CSRRW_FUNC3_VAL) &&
+                      ((insn_bits & CSRR_RD_MASK)     != 0) &&
+                      ((insn_bits & CSRR_RS1_MASK)    != 0));
+  if (!csrrw_valid) {
+    throw trap_illegal_instruction(insn.bits());
+  }
 }
+
 reg_t scratchcsw_t::read() const noexcept {
-  // fixme are reads illegal ?
-  return val;
+  return rd_val;
 }
 bool scratchcsw_t::unlogged_write(const reg_t val) noexcept {
-  // fixme need to add side effects, also checks on (rd != 0), and (rs1 != x0)
-  this->val = val;
+  reg_t prev_val = this->val;
+  if (((state->csrmap[CSR_MSTATUS]->read() & MSTATUS_MPP) >> 11) != PRV_M)
+  {
+    rd_val = prev_val;
+    this->val = val;
+  } else {
+    rd_val = val;
+  }
+  
   return true;
 }
 
 // implemnt class scratchcswl_t
 scratchcswl_t::scratchcswl_t(processor_t* const proc, const reg_t addr):
   csr_t(proc, addr),
-  val(0) {
+  val(0),
+  insn_bits(0),
+  rd_val(0) {
   }
 void scratchcswl_t::verify_permissions(insn_t insn, bool write) const {
   csr_t::verify_permissions(insn, write);
+  insn_bits = insn.bits();
   if(!proc->extension_enabled(EXT_SMCLIC))
     throw trap_illegal_instruction(insn.bits());
-  uint64_t(verify_pemission_rs1) = uint64_t(insn.rs1());
+  bool csrrw_valid = (((insn_bits & CSRR_OPCODE_MASK) == CSRR_OPCODE_VAL) &&
+                      ((insn_bits & CSRR_FUNC3_MASK)  == CSRRW_FUNC3_VAL) &&
+                      ((insn_bits & CSRR_RD_MASK)     != 0) &&
+                      ((insn_bits & CSRR_RS1_MASK)    != 0));
+  if (!csrrw_valid) {
+    throw trap_illegal_instruction(insn.bits());
+  }
 }
 reg_t scratchcswl_t::read() const noexcept {
-  // fixme are reads illegal ?
-  return val;
+  return rd_val;
 }
 bool scratchcswl_t::unlogged_write(const reg_t val) noexcept {
-  // fixme need to add side effects, also checks on (rd != 0), and (rs1 != x0)
-  this->val = val;
+  reg_t prev_val = this->val;
+  if (((state->csrmap[CSR_MCAUSE]->read()     & MCAUSE_MPIL) == 0) != 
+      ((state->csrmap[CSR_MINTSTATUS]->read() & MINTSTATUS_MIL) == 0))
+  {
+    rd_val = prev_val;
+    this->val = val;
+  } else {
+    rd_val = val;
+  }
+  
   return true;
 }
 
@@ -1900,10 +2051,12 @@ reg_t mcause_csr_t::read() const noexcept {
   if (proc->get_isa().get_max_xlen() > proc->get_xlen()) {// Move interrupt bit to top of xlen
     val =  val | ((val >> (proc->get_isa().get_max_xlen()-1)) << (proc->get_xlen()-1));
   }
-  if (proc->extension_enabled(EXT_SMCLIC)) {
-    reg_t mstatus_val = proc->get_state()->mstatus->read();
+  
+  if ((state->csrmap[CSR_MTVEC]->read() & (reg_t)0x3F) == (reg_t)0x03) {
+    reg_t mstatus_val = state->mstatus->read();
     val = set_field(val, MCAUSE_MPP, get_field(mstatus_val, MSTATUS_MPP));
     val = set_field(val, MCAUSE_MPIE, get_field(mstatus_val, MSTATUS_MPIE));
+    val = set_field(val, MCAUSE_MPIL, proc->CLIC.prev_level);
   }
   return val;
 }

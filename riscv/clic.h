@@ -12,19 +12,47 @@
 class processor_t;
 class simif_t;
 
+#define CSRR_OPCODE_MASK 0x7F
+#define CSRR_RS1_MASK    0XF8000
+#define CSRR_RD_MASK     0XF80
+#define CSRR_FUNC3_MASK  0x7000
+
+#define CSRR_OPCODE_VAL  0x73
+
+#define CSRRW_FUNC3_VAL  0x1000
+#define CSRRS_FUNC3_VAL  0x2000
+#define CSRRC_FUNC3_VAL  0x3000
+#define CSRRWI_FUNC3_VAL 0x5000
+#define CSRRSI_FUNC3_VAL 0x6000
+#define CSRRCI_FUNC3_VAL 0x7000
+
 class clic_t : public abstract_device_t
 {
 public:
-    processor_t* p;
-    simif_t* sim;
-    void reset();
-    bool load(reg_t addr, size_t len, uint8_t* bytes) override;
-    bool store(reg_t addr, size_t len, const uint8_t* bytes) override;
-    void take_clic_interrupt();
-    void take_clic_trap(trap_t& t, reg_t epc);
-    clic_t(/* args */);
-    ~clic_t();
-private:
+  processor_t* p;
+  simif_t* sim;
+  reg_t curr_priv;  // current privilege mode
+  bool curr_ie;    // current interrupt enable ie = (xstatus.xie & clicintie[i])
+  reg_t curr_level; // current interrupt level  L = max(xintstatus.xil, xintthresh.th)
+  reg_t prev_priv;  // previous privilege mode
+  bool prev_ie;    // previous interrupt enable ie = (xstatus.xie & clicintie[i])
+  reg_t prev_level; // previous interrupt level  L = max(xintstatus.xil, xintthresh.th)
+  
+  // highest ranked interrupt currently present in CLIC
+  reg_t clic_npriv;
+  reg_t clic_nlevel;
+  reg_t clic_id;
+
+  bool  clic_vrtcl_or_hrzntl_int;  // clic vertical (1) or horizontal interrupt (0)
+  void reset();
+  bool load(reg_t addr, size_t len, uint8_t* bytes) override;
+  bool store(reg_t addr, size_t len, const uint8_t* bytes) override;
+  void take_clic_interrupt();
+  void take_clic_trap(trap_t& t, reg_t epc);
+  void update_clic_nint(); // perform search for higest ranked interrupt in CLIC;
+  clic_t(/* args */);
+  ~clic_t();
+public:
   union clicinttrig_union
   {
     struct {
@@ -56,19 +84,6 @@ private:
   CLICINTATTR_UNION_T clicintattr[CLIC_NUM_INTERRUPT] {0};
   uint8_t  clicintctl[CLIC_NUM_INTERRUPT]  {0};
 
-  reg_t curr_priv;  // current privilege mode
-  bool curr_ie;    // current interrupt enable ie = (xstatus.xie & clicintie[i])
-  reg_t curr_level; // current interrupt level  L = max(xintstatus.xil, xintthresh.th)
-  reg_t prev_priv;  // previous privilege mode
-  bool prev_ie;    // previous interrupt enable ie = (xstatus.xie & clicintie[i])
-  reg_t prev_level; // previous interrupt level  L = max(xintstatus.xil, xintthresh.th)
-  
-  // highest ranked interrupt currently present in CLIC
-  reg_t clic_npriv;
-  reg_t clic_nlevel;
-  reg_t clic_id;
-
-  bool  clic_vrtcl_or_hrzntl_int;  // clic vertical (1) or horizontal interrupt (0)
 
 };
 

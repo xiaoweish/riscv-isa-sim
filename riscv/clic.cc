@@ -427,7 +427,7 @@ clic_t* clic_parse_from_fdt(const void* fdt, const sim_t* sim, reg_t* base,
     return nullptr;
 }
 
-std::string clic_generate_dts(const sim_t* sim) {
+std::string clic_generate_dts(const sim_t* sim,  const std::vector<std::string>& UNUSED sargs) {
   std::stringstream s;
   s << std::hex
     << "    clic@" << MCLIC_BASE << " {\n"

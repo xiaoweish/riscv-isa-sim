@@ -79,8 +79,15 @@ bool clint_t::store(reg_t addr, size_t len, const uint8_t* bytes)
       write_little_endian_reg(&msip, addr, len, bytes);
 
       const auto hart_id = (addr - MSIP_BASE) / sizeof(msip_t);
-      if (sim->get_harts().count(hart_id))
-        sim->get_harts().at(hart_id)->state.mip->backdoor_write_with_mask(MIP_MSIP, msip & 1 ? MIP_MSIP : 0);
+      if (sim->get_harts().count(hart_id)) {
+        if ((sim->get_harts().at(hart_id)->state.mtvec->read() & (reg_t)0x3F) == (reg_t)0x03)
+        {
+          sim->get_harts().at(hart_id)->CLIC.clicintip[3] = 1;
+        } else {
+          sim->get_harts().at(hart_id)->state.mip->backdoor_write_with_mask(MIP_MSIP, msip & 1 ? MIP_MSIP : 0);
+        }
+        
+      }
     }
   } else if (addr >= MTIMECMP_BASE && addr < MTIME_BASE) {
     const auto hart_id = (addr - MTIMECMP_BASE) / sizeof(mtimecmp_t);
@@ -112,7 +119,11 @@ void clint_t::tick(reg_t rtc_ticks)
 
   for (const auto& [hart_id, hart] : sim->get_harts()) {
     hart->state.time->sync(mtime);
-    hart->state.mip->backdoor_write_with_mask(MIP_MTIP, mtime >= mtimecmp[hart_id] ? MIP_MTIP : 0);
+    if ((sim->get_harts().at(hart_id)->state.mtvec->read() & (reg_t)0x3F) == (reg_t)0x03) {
+      hart->CLIC.clicintip[7] = (mtime >= mtimecmp[hart_id]) ? 1 : 0;
+    } else {
+      hart->state.mip->backdoor_write_with_mask(MIP_MTIP, mtime >= mtimecmp[hart_id] ? MIP_MTIP : 0);
+    }
   }
 }
 

@@ -53,6 +53,12 @@
 #define     CLIC_INTCTL_BYTE_OFFSET    0X3
 #define CLIC_INTTBL_ADDR_TOP_OFFSET   0X4FFC
 
+clic_t::CLICINTTRIG_UNION_T clic_t::clicinttrig[CLIC_NUM_TRIGGER]   = {0};
+uint8_t                     clic_t::clicintip[CLIC_NUM_INTERRUPT]   = {0};
+uint8_t                     clic_t::clicintie[CLIC_NUM_INTERRUPT]   = {0};
+clic_t::CLICINTATTR_UNION_T clic_t::clicintattr[CLIC_NUM_INTERRUPT] = {0};
+uint8_t                     clic_t::clicintctl[CLIC_NUM_INTERRUPT]  = {0};
+
 bool clic_t::load(reg_t addr, size_t len, uint8_t *bytes)  {
   if (len > 8)
     return false;
@@ -111,7 +117,7 @@ bool clic_t::load(reg_t addr, size_t len, uint8_t *bytes)  {
     int byte_offset = addr & 0x3;
     for (int i = byte_offset; i < byte_offset + len; i++)
     {
-      switch (byte_offset)
+      switch (i)
       {
       case 0:
         /* clicintip */
@@ -133,8 +139,8 @@ bool clic_t::load(reg_t addr, size_t len, uint8_t *bytes)  {
         return false;
         break;
       }
-      return true;
     }
+    return true;
   } else {
     return false;
   }
@@ -191,10 +197,10 @@ if (len > 8) {
     int byte_offset = addr & 0x3;
     for (int idx = byte_offset; idx < len; idx++)
     {
-      switch (byte_offset)
+      switch (idx)
       {
       case 0:
-        clicintip[index] = bytes[idx]; // check 
+        clicintip[index] = bytes[idx]; // check
         break;
       case 1:
         clicintie[index] = bytes[idx];
@@ -208,8 +214,8 @@ if (len > 8) {
       default:
         break;
       }
-      return true;
     }
+    return true;
   } else {
     return false;
   }

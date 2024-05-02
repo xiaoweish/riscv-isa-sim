@@ -78,11 +78,11 @@ public:
 
   typedef union clicintattr_union CLICINTATTR_UNION_T;
   
-  CLICINTTRIG_UNION_T clicinttrig[CLIC_NUM_TRIGGER]   {0};
-  uint8_t             clicintip[CLIC_NUM_INTERRUPT]   {0};
-  uint8_t             clicintie[CLIC_NUM_INTERRUPT]   {0};
-  CLICINTATTR_UNION_T clicintattr[CLIC_NUM_INTERRUPT] {0};
-  uint8_t  clicintctl[CLIC_NUM_INTERRUPT]  {0};
+  static CLICINTTRIG_UNION_T clicinttrig[CLIC_NUM_TRIGGER]   ;
+  static uint8_t             clicintip[CLIC_NUM_INTERRUPT]   ;
+  static uint8_t             clicintie[CLIC_NUM_INTERRUPT]   ;
+  static CLICINTATTR_UNION_T clicintattr[CLIC_NUM_INTERRUPT] ;
+  static uint8_t  clicintctl[CLIC_NUM_INTERRUPT]  ;
 
 
 };

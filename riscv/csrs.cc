@@ -1898,28 +1898,17 @@ tvt_t::tvt_t(processor_t* const proc, const reg_t addr):
 
 reg_t tvt_t::read() const noexcept {
   reg_t val = basic_csr_t::read();
-  std::cout << "SEAGATE debug : read mtvt opcode = 0x" << std::hex << std::setfill('0') << std::setw(8)  << (insn_bits & CSRR_OPCODE_MASK) << std::endl;
-  std::cout << "SEAGATE debug : read mtvt funct3 = 0x" << std::hex << std::setfill('0') << std::setw(8)  << ((insn_bits & CSRR_FUNC3_MASK) >> 12) << std::endl;
-  std::cout << "SEAGATE debug : read mtvt    rs1 = 0x" << std::hex << std::setfill('0') << std::setw(8)  << ((insn_bits & CSRR_RS1_MASK) >> 15) << std::endl;
-  std::cout << "SEAGATE debug : read mtvt    val = 0x" << std::hex << std::setfill('0') << std::setw(8)  << val << std::endl;
   return val;
 }
  
 void tvt_t::verify_permissions(insn_t insn, bool write) const {
   basic_csr_t::verify_permissions(insn, write);
-  std::cout << "SEAGATE debug : verify permissions mtvt opcode = 0x" << std::hex << std::setfill('0') << std::setw(8)  << (insn.bits() & CSRR_OPCODE_MASK) << std::endl;
-  std::cout << "SEAGATE debug : verify permissions mtvt funct3 = 0x" << std::hex << std::setfill('0') << std::setw(8)  << (insn.rm()) << std::endl;
-  std::cout << "SEAGATE debug : verify permissions mtvt    rs1 = 0x" << std::hex << std::setfill('0') << std::setw(8)  << (insn.rs1()) << std::endl;
   if (!proc->extension_enabled(EXT_SMCLIC))
     throw trap_illegal_instruction(insn.bits());
   insn_bits = insn.bits();
 }
 
 bool tvt_t::unlogged_write(const reg_t val) noexcept {
-  std::cout << "SEAGATE debug : write mtvt opcode = 0x" << std::hex << std::setfill('0') << std::setw(8)  << (insn_bits & CSRR_OPCODE_MASK) << std::endl;
-  std::cout << "SEAGATE debug : write mtvt funct3 = 0x" << std::hex << std::setfill('0') << std::setw(8)  << ((insn_bits & CSRR_FUNC3_MASK) >> 12) << std::endl;
-  std::cout << "SEAGATE debug : write mtvt    rs1 = 0x" << std::hex << std::setfill('0') << std::setw(8)  << ((insn_bits & CSRR_RS1_MASK) >> 15) << std::endl;
-  std::cout << "SEAGATE debug : write mtvt    val = 0x" << std::hex << std::setfill('0') << std::setw(8)  << val << std::endl;
 //  return basic_csr_t::unlogged_write(val & ~(reg_t)0x3F);
   return basic_csr_t::unlogged_write(val);
 }

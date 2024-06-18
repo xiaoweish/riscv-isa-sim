@@ -230,14 +230,18 @@ void clic_t::update_clic_nint() {
   clic_id     = 0;
 
   for (int indx = 0; indx < CLIC_NUM_INTERRUPT; indx++) {
-    if (((clicintattr[indx].mode << 8) | clicintctl[indx]) >= int_selected)
-    {
-      int_selected = ((clicintattr[indx].mode << 8) | clicintctl[indx]);
-      clic_npriv  = clicintattr[indx].mode;
-      clic_nlevel = clicintctl[indx];
-      clic_id     = indx;
+    if (clicintip[indx] != 0) {
+        if (((clicintattr[indx].mode << 8) | clicintctl[indx]) >= int_selected)
+        {
+        int_selected = ((clicintattr[indx].mode << 8) | clicintctl[indx]);
+        clic_npriv  = clicintattr[indx].mode;
+        clic_nlevel = clicintctl[indx];
+        clic_id     = indx;
+        }
     }
   }
+
+
 };
 
 void clic_t::take_clic_interrupt() {
@@ -271,13 +275,11 @@ void clic_t::take_clic_interrupt() {
   
   curr_priv = state->prv;
   bool xstatus_xie = false;
-  int int_id = CLIC_NUM_INTERRUPT;
   curr_ie = false;
   switch (curr_priv)
   {
   case PRV_U:
     //xstatus_xie = (state->ustatus->read() & USTATUS_UIE) ? true : false;
-    //int_id = (state->ucause->read() & UCAUSE_EXCCODE);
     curr_level = (state->csrmap[CSR_MINTSTATUS]->read() & MINTSTATUS_UIL) >> MINTSTATUS_UIL_LSB;
     // if ((curr_level) < (state->csrmap[CSR_UINTTHRESH]->read()))
     // {
@@ -288,7 +290,6 @@ void clic_t::take_clic_interrupt() {
 
   case PRV_S:
     xstatus_xie = (state->sstatus->read() & SSTATUS_SIE) ? true : false;
-    int_id = (state->scause->read() & SCAUSE_EXCCODE); // fixme - upate when ssclic extension enabled
     curr_level = (state->csrmap[CSR_MINTSTATUS]->read() & MINTSTATUS_SIL) >> MINTSTATUS_SIL_LSB;
     // if (curr_level < state->csrmap[CSR_SINTTHRESH]->read())
     // {
@@ -298,7 +299,6 @@ void clic_t::take_clic_interrupt() {
 
   case PRV_M:
     xstatus_xie = (state->mstatus->read() & MSTATUS_MIE) ? true : false;
-    int_id = (state->mcause->read() & MCAUSE_EXCCODE);
     curr_level = (state->csrmap[CSR_MINTSTATUS]->read() & MINTSTATUS_MIL) >> MINTSTATUS_MIL_LSB;
     if (curr_level < state->csrmap[CSR_MINTTHRESH]->read())
     {
@@ -310,11 +310,11 @@ void clic_t::take_clic_interrupt() {
     break;
   } 
   
-  if (clicintie[int_id] != 0) {
+  if (clicintie[clic_id] != 0) {
     p->in_wfi = false;
   }
 
-  curr_ie = xstatus_xie && (clicintie[int_id] != 0);
+  curr_ie = xstatus_xie && (clicintie[clic_id] != 0);
 
   if ((clic_npriv > curr_priv) && (0 < clic_nlevel) && curr_ie) // vertical interrupt
   {
@@ -336,7 +336,7 @@ void clic_t::take_clic_interrupt() {
 }
 
 void clic_t::take_clic_trap(trap_t& t, reg_t epc) {  // fixme - Implementation for SMCLIC mode only
-    unsigned max_xlen = p->isa->get_max_xlen();
+  unsigned max_xlen = p->isa->get_max_xlen();
 
   // fixme - do the preexisting "debug" and/or "state.debug_mode" mode stuff need to be copied from CLINT mode ?
 
@@ -398,7 +398,6 @@ void clic_t::reset() {
   csrmap[CSR_MINTTHRESH] = std::make_shared<intthresh_t>(p, CSR_MINTTHRESH);
   csrmap[CSR_MSCRATCHCSW] = std::make_shared<scratchcsw_t>(p, CSR_MSCRATCHCSW);
   csrmap[CSR_MSCRATCHCSWL] = std::make_shared<scratchcswl_t>(p, CSR_MSCRATCHCSWL);
-  csrmap[CSR_MCAUSE] = p->state.mcause = std::make_shared<mcause_csr_t>(p,CSR_MCAUSE);
 
   reg_t mintstatus = csrmap[CSR_MINTSTATUS]->read();
   mintstatus = mintstatus & ~MINTSTATUS_MIL;

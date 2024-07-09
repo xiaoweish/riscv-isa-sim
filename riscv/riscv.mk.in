@@ -898,6 +898,7 @@ riscv_insn_priv = \
 	sfence_vma \
 	sret \
 	wfi \
+  uret \
 
 riscv_insn_smrnmi = \
 	mnret \

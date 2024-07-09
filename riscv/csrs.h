@@ -226,7 +226,9 @@ class base_status_csr_t: public csr_t {
   const bool has_page;
   const reg_t sstatus_write_mask;
   const reg_t sstatus_read_mask;
+  const reg_t ustatus_mask;
  private:
+  reg_t compute_ustatus_mask() const noexcept;
   reg_t compute_sstatus_write_mask() const noexcept;
 };
 
@@ -273,6 +275,22 @@ class mnstatus_csr_t final: public basic_csr_t {
  protected:
   virtual bool unlogged_write(const reg_t val) noexcept override;
 };
+
+class ustatus_csr_t: public base_status_csr_t {
+ public:
+  ustatus_csr_t(processor_t* const proc, const reg_t addr, mstatus_csr_t_p mstatus);
+
+  reg_t read() const noexcept override {
+    return mstatus->read() & ustatus_mask;
+  }
+
+ protected:
+  virtual bool unlogged_write(const reg_t val) noexcept override;
+ private:
+  mstatus_csr_t_p mstatus;
+};
+
+typedef std::shared_ptr<ustatus_csr_t> ustatus_csr_t_p;
 
 // For RV32 CSRs that are split into two, e.g. mstatus/mstatush
 // CSRW should only modify the lower half
@@ -394,7 +412,7 @@ typedef std::shared_ptr<mie_csr_t> mie_csr_t_p;
 // etc.
 class generic_int_accessor_t {
  public:
-  enum mask_mode_t { NONE, MIDELEG, HIDELEG };
+  enum mask_mode_t { NONE, MIDELEG, HIDELEG, SIDELEG };
 
   generic_int_accessor_t(state_t* const state,
                          const reg_t read_mask,
@@ -413,11 +431,32 @@ class generic_int_accessor_t {
   const reg_t ie_write_mask;
   const bool mask_mideleg;
   const bool mask_hideleg;
+  const bool mask_sideleg;
   const int shiftamt;
   reg_t deleg_mask() const;
 };
 
 typedef std::shared_ptr<generic_int_accessor_t> generic_int_accessor_t_p;
+
+class sideleg_csr_t: public basic_csr_t {
+ public:
+  sideleg_csr_t(processor_t* const proc, const reg_t addr, csr_t_p mideleg);
+  virtual void verify_permissions(insn_t insn, bool write) const override;
+  virtual reg_t read() const noexcept override;
+ protected:
+  virtual bool unlogged_write(const reg_t val) noexcept override;
+  csr_t_p mideleg;
+};
+
+class sedeleg_csr_t: public basic_csr_t {
+ public:
+  sedeleg_csr_t(processor_t* const proc, const reg_t addr, csr_t_p medeleg);
+  virtual void verify_permissions(insn_t insn, bool write) const override;
+  virtual reg_t read() const noexcept override;
+ protected:
+  virtual bool unlogged_write(const reg_t val) noexcept override;
+  csr_t_p medeleg;
+};
 
 // For all CSRs that are simply (masked & shifted) views into mip
 class mip_proxy_csr_t: public csr_t {

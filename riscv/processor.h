@@ -107,6 +107,13 @@ struct state_t
   csr_t_p stvec;
   virtualized_csr_t_p satp;
   csr_t_p scause;
+  csr_t_p sedeleg;
+  csr_t_p sideleg;
+  ustatus_csr_t_p ustatus;
+  csr_t_p uepc;
+  csr_t_p utval;
+  csr_t_p utvec;
+  csr_t_p ucause;
 
   // When taking a trap into HS-mode, we must access the nonvirtualized HS-mode CSRs directly:
   csr_t_p nonvirtual_stvec;

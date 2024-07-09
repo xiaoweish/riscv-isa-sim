@@ -414,9 +414,16 @@ reg_t cause_csr_t::read() const noexcept {
 base_status_csr_t::base_status_csr_t(processor_t* const proc, const reg_t addr):
   csr_t(proc, addr),
   has_page(proc->extension_enabled_const('S') && proc->supports_impl(IMPL_MMU)),
+  ustatus_mask(compute_ustatus_mask()),
   sstatus_write_mask(compute_sstatus_write_mask()),
   sstatus_read_mask(sstatus_write_mask | SSTATUS_UBE | SSTATUS_UXL
                     | (proc->get_const_xlen() == 32 ? SSTATUS32_SD : SSTATUS64_SD)) {
+}
+
+reg_t base_status_csr_t::compute_ustatus_mask() const noexcept {
+  return 0
+    | (proc->extension_enabled('N') ? (SSTATUS_UIE | SSTATUS_UPIE) : 0)
+    ;
 }
 
 reg_t base_status_csr_t::compute_sstatus_write_mask() const noexcept {
@@ -426,6 +433,7 @@ reg_t base_status_csr_t::compute_sstatus_write_mask() const noexcept {
               || proc->extension_enabled('V')) && !proc->extension_enabled(EXT_ZFINX);
   const bool has_vs = proc->extension_enabled('V');
   return 0
+    | (proc->extension_enabled('N') ? (SSTATUS_UIE | SSTATUS_UPIE) : 0)
     | (proc->extension_enabled('S') ? (SSTATUS_SIE | SSTATUS_SPIE | SSTATUS_SPP) : 0)
     | (has_page ? (SSTATUS_SUM | SSTATUS_MXR) : 0)
     | (has_fs ? SSTATUS_FS : 0)
@@ -433,6 +441,20 @@ reg_t base_status_csr_t::compute_sstatus_write_mask() const noexcept {
     | (has_vs ? SSTATUS_VS : 0)
     | (proc->extension_enabled(EXT_ZICFILP) ? SSTATUS_SPELP : 0)
     ;
+}
+
+// implement class ustatus_csr_t
+ustatus_csr_t::ustatus_csr_t(processor_t* const proc, const reg_t addr, mstatus_csr_t_p mstatus):
+  base_status_csr_t(proc, addr),
+  mstatus(mstatus) {
+}
+
+bool ustatus_csr_t::unlogged_write(const reg_t val) noexcept {
+  reg_t mask = ustatus_mask;
+  const reg_t new_ustatus = (read() & ~mask) | (val & mask);
+  maybe_flush_tlb(new_ustatus);
+  state->mstatus->write((state->mstatus->read() & ~mask) | new_ustatus);
+  return true;
 }
 
 reg_t base_status_csr_t::adjust_sd(const reg_t val) const noexcept {
@@ -766,6 +788,7 @@ void mip_csr_t::backdoor_write_with_mask(const reg_t mask, const reg_t val) noex
 
 reg_t mip_csr_t::write_mask() const noexcept {
   // MIP_STIP is writable unless SSTC exists and STCE is set in MENVCFG
+  const reg_t user_ints = proc->extension_enabled('N') ? MIP_U_MASK : 0;
   const reg_t supervisor_ints = proc->extension_enabled('S') ? MIP_SSIP | ((state->menvcfg->read() &  MENVCFG_STCE) ? 0 : MIP_STIP) | MIP_SEIP : 0;
   const reg_t lscof_int = proc->extension_enabled(EXT_SSCOFPMF) ? MIP_LCOFIP : 0;
   const reg_t vssip_int = proc->extension_enabled('H') ? MIP_VSSIP : 0;
@@ -775,8 +798,8 @@ reg_t mip_csr_t::write_mask() const noexcept {
   //  * sgeip is read-only -- write hgeip instead
   //  * vseip is read-only -- write hvip instead
   //  * vstip is read-only -- write hvip instead
-  return (supervisor_ints | hypervisor_ints | lscof_int) &
-         (MIP_SEIP | MIP_SSIP | MIP_STIP | MIP_LCOFIP | vssip_int);
+  return (user_ints | supervisor_ints | hypervisor_ints | lscof_int) &
+         (MIP_U_MASK | MIP_SEIP | MIP_SSIP | MIP_STIP | MIP_LCOFIP | vssip_int);
 }
 
 mie_csr_t::mie_csr_t(processor_t* const proc, const reg_t addr):
@@ -784,11 +807,12 @@ mie_csr_t::mie_csr_t(processor_t* const proc, const reg_t addr):
 }
 
 reg_t mie_csr_t::write_mask() const noexcept {
+  const reg_t user_ints = proc->extension_enabled('N') ? MIP_U_MASK : 0;
   const reg_t supervisor_ints = proc->extension_enabled('S') ? MIP_SSIP | MIP_STIP | MIP_SEIP : 0;
   const reg_t lscof_int = proc->extension_enabled(EXT_SSCOFPMF) ? MIP_LCOFIP : 0;
   const reg_t hypervisor_ints = proc->extension_enabled('H') ? MIP_HS_MASK : 0;
   const reg_t coprocessor_ints = (reg_t)proc->any_custom_extensions() << IRQ_COP;
-  const reg_t delegable_ints = supervisor_ints | coprocessor_ints | lscof_int;
+  const reg_t delegable_ints = user_ints | supervisor_ints | coprocessor_ints | lscof_int;
   const reg_t all_ints = delegable_ints | hypervisor_ints | MIP_MSIP | MIP_MTIP | MIP_MEIP;
   return all_ints;
 }
@@ -806,6 +830,7 @@ generic_int_accessor_t::generic_int_accessor_t(state_t* const state,
   ie_write_mask(ie_write_mask),
   mask_mideleg(mask_mode == MIDELEG),
   mask_hideleg(mask_mode == HIDELEG),
+  mask_sideleg(mask_mode == SIDELEG),
   shiftamt(shiftamt) {
 }
 
@@ -830,7 +855,8 @@ void generic_int_accessor_t::ie_write(const reg_t val) noexcept {
 reg_t generic_int_accessor_t::deleg_mask() const {
   const reg_t hideleg_mask = mask_hideleg ? state->hideleg->read() : (reg_t)~0;
   const reg_t mideleg_mask = mask_mideleg ? state->mideleg->read() : (reg_t)~0;
-  return hideleg_mask & mideleg_mask;
+  const reg_t sideleg_mask = mask_sideleg ? state->mideleg->read() & state->sideleg->read() : (reg_t)~0;
+  return sideleg_mask & hideleg_mask & mideleg_mask;
 }
 
 // implement class mip_proxy_csr_t
@@ -878,17 +904,42 @@ reg_t mideleg_csr_t::read() const noexcept {
 
 void mideleg_csr_t::verify_permissions(insn_t insn, bool write) const {
   basic_csr_t::verify_permissions(insn, write);
-  if (!proc->extension_enabled('S'))
+  if (!proc->extension_enabled('S') && !proc->extension_enabled('N'))
     throw trap_illegal_instruction(insn.bits());
 }
 
 bool mideleg_csr_t::unlogged_write(const reg_t val) noexcept {
+  const reg_t user_ints = proc->extension_enabled('N') ? MIP_U_MASK : 0;
   const reg_t supervisor_ints = proc->extension_enabled('S') ? MIP_SSIP | MIP_STIP | MIP_SEIP : 0;
   const reg_t lscof_int = proc->extension_enabled(EXT_SSCOFPMF) ? MIP_LCOFIP : 0;
   const reg_t coprocessor_ints = (reg_t)proc->any_custom_extensions() << IRQ_COP;
-  const reg_t delegable_ints = supervisor_ints | coprocessor_ints | lscof_int;
+  const reg_t delegable_ints = user_ints | supervisor_ints | coprocessor_ints | lscof_int;
 
   return basic_csr_t::unlogged_write(val & delegable_ints);
+}
+
+// implement class sideleg_csr_t
+sideleg_csr_t::sideleg_csr_t(processor_t* const proc, const reg_t addr, csr_t_p mideleg):
+  basic_csr_t(proc, addr, 0),
+  mideleg(mideleg) {
+}
+
+reg_t sideleg_csr_t::read() const noexcept {
+  return basic_csr_t::read() & mideleg->read();
+}
+
+void sideleg_csr_t::verify_permissions(insn_t insn, bool write) const {
+  if (!proc->extension_enabled('N'))
+    throw trap_illegal_instruction(insn.bits());
+  basic_csr_t::verify_permissions(insn, write);
+}
+
+bool sideleg_csr_t::unlogged_write(const reg_t val) noexcept {
+  const reg_t user_ints = proc->extension_enabled('N') ? MIP_USIP | MIP_UTIP | MIP_UEIP : 0;
+  const reg_t lscof_int = proc->extension_enabled(EXT_SSCOFPMF) ? MIP_LCOFIP : 0;
+  const reg_t delegable_ints = user_ints | lscof_int;
+
+  return basic_csr_t::unlogged_write(val & proc->get_csr_props()->sidelegatable_mask);
 }
 
 // implement class medeleg_csr_t
@@ -905,7 +956,7 @@ medeleg_csr_t::medeleg_csr_t(processor_t* const proc, const reg_t addr):
 
 void medeleg_csr_t::verify_permissions(insn_t insn, bool write) const {
   basic_csr_t::verify_permissions(insn, write);
-  if (!proc->extension_enabled('S'))
+  if (!proc->extension_enabled('S') && !proc->extension_enabled('N'))
     throw trap_illegal_instruction(insn.bits());
 }
 
@@ -927,6 +978,27 @@ bool medeleg_csr_t::unlogged_write(const reg_t val) noexcept {
     | (proc->extension_enabled('H') ? hypervisor_exceptions : 0)
     | (1 << CAUSE_SOFTWARE_CHECK_FAULT)
     ;
+  return basic_csr_t::unlogged_write((read() & ~mask) | (val & mask));
+}
+
+// implement class sedeleg_csr_t
+sedeleg_csr_t::sedeleg_csr_t(processor_t* const proc, const reg_t addr, csr_t_p medeleg):
+  basic_csr_t(proc, addr, 0),
+  medeleg(medeleg) {
+}
+
+void sedeleg_csr_t::verify_permissions(insn_t insn, bool write) const {
+  if (!proc->extension_enabled('N'))
+    throw trap_illegal_instruction(insn.bits());
+  basic_csr_t::verify_permissions(insn, write);
+}
+
+reg_t sedeleg_csr_t::read() const noexcept {
+  return basic_csr_t::read() & medeleg->read();
+};
+
+bool sedeleg_csr_t::unlogged_write(const reg_t val) noexcept {
+  const reg_t mask = proc->get_csr_props()->sedelegatable_mask;
   return basic_csr_t::unlogged_write((read() & ~mask) | (val & mask));
 }
 

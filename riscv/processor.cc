@@ -296,8 +296,19 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
     this,
     ~MIP_HS_MASK,  // read_mask
     MIP_SSIP | MIP_LCOFIP,  // ip_write_mask
-    ~MIP_HS_MASK,  // ie_write_mask
+    ~MIP_HS_MASK & (proc->extension_enabled('N') ? ~0 : ~MIP_U_MASK),
+                   // ie_write_mask
     generic_int_accessor_t::mask_mode_t::MIDELEG,
+    0              // shiftamt
+  );
+
+  auto uip_uie_accr = std::make_shared<generic_int_accessor_t>(
+    this,
+    MIP_U_MASK,    // read_mask
+    MIP_U_MASK,    // ip_write_mask
+    MIP_U_MASK,    // ie_write_mask
+    proc->extension_enabled('S') ? generic_int_accessor_t::mask_mode_t::SIDELEG
+                                 : generic_int_accessor_t::mask_mode_t::MIDELEG,
     0              // shiftamt
   );
 
@@ -321,19 +332,27 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
 
   auto nonvirtual_sip = std::make_shared<mip_proxy_csr_t>(proc, CSR_SIP, sip_sie_accr);
   auto vsip = std::make_shared<mip_proxy_csr_t>(proc, CSR_VSIP, vsip_vsie_accr);
+  auto uip = std::make_shared<mip_proxy_csr_t>(proc, CSR_UIP, uip_uie_accr);
   csrmap[CSR_VSIP] = vsip;
   csrmap[CSR_SIP] = std::make_shared<virtualized_csr_t>(proc, nonvirtual_sip, vsip);
   csrmap[CSR_HIP] = std::make_shared<mip_proxy_csr_t>(proc, CSR_HIP, hip_hie_accr);
   csrmap[CSR_HVIP] = hvip = std::make_shared<hvip_csr_t>(proc, CSR_HVIP, 0);
+  if (proc->extension_enabled_const('U') && proc->extension_enabled_const('N'))
+     csrmap[CSR_UIP] = uip;
 
   auto nonvirtual_sie = std::make_shared<mie_proxy_csr_t>(proc, CSR_SIE, sip_sie_accr);
   auto vsie = std::make_shared<mie_proxy_csr_t>(proc, CSR_VSIE, vsip_vsie_accr);
+  auto uie = std::make_shared<mie_proxy_csr_t>(proc, CSR_UIE, uip_uie_accr);
   csrmap[CSR_VSIE] = vsie;
   csrmap[CSR_SIE] = std::make_shared<virtualized_csr_t>(proc, nonvirtual_sie, vsie);
   csrmap[CSR_HIE] = std::make_shared<mie_proxy_csr_t>(proc, CSR_HIE, hip_hie_accr);
+  if (proc->extension_enabled_const('U') && proc->extension_enabled_const('N'))
+     csrmap[CSR_UIE] = uie;
 
   csrmap[CSR_MEDELEG] = medeleg = std::make_shared<medeleg_csr_t>(proc, CSR_MEDELEG);
   csrmap[CSR_MIDELEG] = mideleg = std::make_shared<mideleg_csr_t>(proc, CSR_MIDELEG);
+  csrmap[CSR_SEDELEG] = sedeleg = std::make_shared<sedeleg_csr_t>(proc, CSR_SEDELEG, medeleg);
+  csrmap[CSR_SIDELEG] = sideleg = std::make_shared<sideleg_csr_t>(proc, CSR_SIDELEG, mideleg);
   const reg_t counteren_mask = (proc->extension_enabled_const(EXT_ZICNTR) ? 0x7UL : 0x0) | (proc->extension_enabled_const(EXT_ZIHPM) ? 0xfffffff8ULL : 0x0);
   mcounteren = std::make_shared<masked_csr_t>(proc, CSR_MCOUNTEREN, counteren_mask, 0);
   if (proc->extension_enabled_const('U')) csrmap[CSR_MCOUNTEREN] = mcounteren;
@@ -397,6 +416,15 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
   nonvirtual_sstatus = std::make_shared<sstatus_proxy_csr_t>(proc, CSR_SSTATUS, mstatus);
   csrmap[CSR_VSSTATUS] = vsstatus = std::make_shared<vsstatus_csr_t>(proc, CSR_VSSTATUS);
   csrmap[CSR_SSTATUS] = sstatus = std::make_shared<sstatus_csr_t>(proc, nonvirtual_sstatus, vsstatus);
+
+  if (proc->extension_enabled_const('U') && proc->extension_enabled_const('N')) {
+    csrmap[CSR_UEPC] = uepc = std::make_shared<epc_csr_t>(proc, CSR_UEPC);
+    csrmap[CSR_UTVAL] = utval = std::make_shared<basic_csr_t>(proc, CSR_UTVAL, 0);
+    csrmap[CSR_USCRATCH] = std::make_shared<basic_csr_t>(proc, CSR_USCRATCH, 0);
+    csrmap[CSR_UTVEC] = utvec = std::make_shared<tvec_csr_t>(proc, CSR_UTVEC);
+    csrmap[CSR_UCAUSE] = ucause = std::make_shared<cause_csr_t>(proc, CSR_UCAUSE);
+    csrmap[CSR_USTATUS] = ustatus = std::make_shared<ustatus_csr_t>(proc, CSR_USTATUS, mstatus);
+  }
 
   csrmap[CSR_DPC] = dpc = std::make_shared<dpc_csr_t>(proc, CSR_DPC);
   csrmap[CSR_DSCRATCH0] = std::make_shared<debug_mode_csr_t>(proc, CSR_DSCRATCH0);
@@ -743,7 +771,8 @@ void processor_t::take_interrupt(reg_t pending_interrupts)
   reg_t enabled_interrupts = pending_interrupts & ~state.mideleg->read() & -m_enabled;
   if (enabled_interrupts == 0) {
     // HS-ints have higher priority over VS-ints
-    const reg_t deleg_to_hs = state.mideleg->read() & ~state.hideleg->read();
+    const reg_t deleg_to_hs = extension_enabled('N')? state.mideleg->read() & ~state.sideleg->read():
+                                                      state.mideleg->read() & ~state.hideleg->read();
     const reg_t sie = get_field(state.sstatus->read(), MSTATUS_SIE);
     const reg_t hs_enabled = state.v || state.prv < PRV_S || (state.prv == PRV_S && sie);
     enabled_interrupts = pending_interrupts & deleg_to_hs & -hs_enabled;
@@ -752,6 +781,20 @@ void processor_t::take_interrupt(reg_t pending_interrupts)
       const reg_t deleg_to_vs = state.hideleg->read();
       const reg_t vs_enabled = state.prv < PRV_S || (state.prv == PRV_S && sie);
       enabled_interrupts = pending_interrupts & deleg_to_vs & -vs_enabled;
+    } else if (!state.v && enabled_interrupts == 0) {
+        if (extension_enabled('S') && extension_enabled('N') && enabled_interrupts == 0) {
+            // This is where we process U-ints for MSU mode
+            const reg_t deleg_to_u = state.mideleg->read() & state.sideleg->read();
+            const reg_t uie = get_field(state.ustatus->read(), MSTATUS_UIE);
+            const reg_t u_enabled = state.prv == PRV_U && uie;
+            enabled_interrupts = pending_interrupts & deleg_to_u & -u_enabled;
+        } else if (extension_enabled('N') && extension_enabled('U') && enabled_interrupts == 0) {
+            // This is where we process U-ints for MU mode
+            const reg_t deleg_to_u = state.mideleg->read();
+            const reg_t uie = get_field(state.ustatus->read(), MSTATUS_UIE);
+            const reg_t u_enabled = state.prv == PRV_U && uie;
+            enabled_interrupts = pending_interrupts & deleg_to_u & -u_enabled;
+        }
     }
   }
 
@@ -773,6 +816,12 @@ void processor_t::take_interrupt(reg_t pending_interrupts)
       enabled_interrupts = MIP_SSIP;
     else if (enabled_interrupts & MIP_STIP)
       enabled_interrupts = MIP_STIP;
+    else if (enabled_interrupts & MIP_UEIP)
+      enabled_interrupts = MIP_UEIP;
+    else if (enabled_interrupts & MIP_USIP)
+      enabled_interrupts = MIP_USIP;
+    else if (enabled_interrupts & MIP_UTIP)
+      enabled_interrupts = MIP_UTIP;
     else if (enabled_interrupts & MIP_LCOFIP)
       enabled_interrupts = MIP_LCOFIP;
     else if (enabled_interrupts & MIP_VSEIP)
@@ -890,20 +939,55 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
   }
 
   // By default, trap to M-mode, unless delegated to HS-mode or VS-mode
-  reg_t vsdeleg, hsdeleg;
+  reg_t vsdeleg, hsdeleg, udeleg = 0;
   reg_t bit = t.cause();
   bool curr_virt = state.v;
   const reg_t interrupt_bit = (reg_t)1 << (max_xlen - 1);
   bool interrupt = (bit & interrupt_bit) != 0;
   if (interrupt) {
+    if (extension_enabled('N')) {
+      if (extension_enabled('S'))
+        udeleg = (!curr_virt && state.prv <= PRV_U) ? (state.mideleg->read() & state.sideleg->read()) : 0;
+      else
+        udeleg = (!curr_virt && state.prv <= PRV_U) ? state.mideleg->read() : 0;
+    }
     vsdeleg = (curr_virt && state.prv <= PRV_S) ? state.hideleg->read() : 0;
     hsdeleg = (state.prv <= PRV_S) ? state.mideleg->read() : 0;
     bit &= ~((reg_t)1 << (max_xlen - 1));
   } else {
+    if (extension_enabled('N')) {
+      if (extension_enabled('S'))
+        udeleg  = (!curr_virt && state.prv <= PRV_U) ? (state.medeleg->read() & state.sedeleg->read()) : 0;
+      else
+        udeleg  = (!curr_virt && state.prv <= PRV_U) ? state.medeleg->read() : 0;
+      }
     vsdeleg = (curr_virt && state.prv <= PRV_S) ? (state.medeleg->read() & state.hedeleg->read()) : 0;
     hsdeleg = (state.prv <= PRV_S) ? state.medeleg->read() : 0;
   }
-  if (state.prv <= PRV_S && bit < max_xlen && ((vsdeleg >> bit) & 1)) {
+
+  if (extension_enabled('N') && state.prv <= PRV_U && bit < max_xlen && ((udeleg >> bit) & 1)) {
+    // Handle the trap in U-mode
+    reg_t vector = (state.utvec->read() & 1) && interrupt ? 4 * bit : 0;
+    reg_t satp_read = state.satp->read();
+    state.pc = (state.utvec->read() & ~(reg_t)1) + vector;
+    state.ucause->write(t.cause());
+    state.uepc->write(epc);
+    state.utval->write(t.get_tval(csr_props.tval_save_ii_bits, csr_props.tval_zero_on_ebreak, csr_props.tval_zero_on_addr_misalign, csr_props.tval_custom_uncanonical, satp_read));
+  
+    reg_t s = state.ustatus->read();
+    s = set_field(s, MSTATUS_UPIE, get_field(s, MSTATUS_UIE));
+    s = set_field(s, MSTATUS_UIE, 0);
+    state.ustatus->write(s);
+    set_privilege(PRV_U, false);
+      if (debug && log_commits) {
+        r << std::hex
+          << "c41_uepc 0x"   << std::setfill('0') << std::setw(max_xlen/4) << zext(state.uepc->read(), max_xlen) << " "
+          << "c42_ucause 0x" << std::setfill('0') << std::setw(max_xlen/4) << zext(state.ucause->read(), max_xlen) << " "
+          << "c43_utval 0x"  << std::setfill('0') << std::setw(max_xlen/4) << zext(state.utval->read(), max_xlen) << " "
+          << "c0_ustatus 0x" << std::setfill('0') << std::setw(max_xlen/4) << zext(state.ustatus->read(), max_xlen)
+          << std::dec;
+      }
+    } else if (state.prv <= PRV_S && bit < max_xlen && ((vsdeleg >> bit) & 1)) {
     // Handle the trap in VS-mode
     const reg_t adjusted_cause = interrupt ? bit - 1 : bit;  // VSSIP -> SSIP, etc
     reg_t vector = (state.vstvec->read() & 1) && interrupt ? 4 * adjusted_cause : 0;

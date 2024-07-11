@@ -240,6 +240,38 @@ class opcode_cache_entry_t {
   const insn_desc_t* contents[associativity];
 };
 
+// CSR properties for RISC-V hart
+struct csr_props_t
+{
+  size_t tval_save_ii_bits;
+  size_t tval_zero_on_ebreak;
+  size_t tval_zero_on_addr_misalign;
+  size_t tval_custom_uncanonical;
+
+  size_t cause_rw_mask;
+  size_t jvt_rw_mask;
+  size_t event_rw_mask;
+
+  size_t ie_zero_mask;
+
+  size_t medelegatable_mask;
+  size_t midelegatable_mask;
+  size_t hedelegatable_mask;
+  size_t hidelegatable_mask;
+  size_t sedelegatable_mask;
+  size_t sidelegatable_mask;
+
+  size_t mideleg_vs_mask_ro_one;
+  size_t status_fs_ro_zero;
+  size_t status_vs_ro_zero;
+  size_t status_ext_off_on_misa_clr;
+
+  size_t envcfg_fiom_ro_one;
+  size_t envcfg_stce_ro_one;
+
+  size_t hpm_absent_acc_illegal;
+};
+
 // this class represents one processor in a RISC-V machine.
 class processor_t : public abstract_device_t
 {
@@ -366,12 +398,17 @@ public:
 
   void check_if_lpad_required();
 
+  csr_props_t * get_csr_props() { return &csr_props; }
+
 private:
   const isa_parser_t * const isa;
   const cfg_t * const cfg;
 
   simif_t* sim;
   mmu_t* mmu; // main memory is always accessed via the mmu
+
+  csr_props_t csr_props;
+  
   std::unordered_map<std::string, extension_t*> custom_extensions;
   disassembler_t* disassembler;
   state_t state;

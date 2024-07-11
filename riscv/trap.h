@@ -20,7 +20,7 @@ class trap_t
   trap_t(reg_t which) : which(which) {}
   virtual bool has_gva() { return false; }
   virtual bool has_tval() { return false; }
-  virtual reg_t get_tval() { return 0; }
+  virtual reg_t get_tval(bool save_ii_bits = false, bool zero_on_ebreak = false, bool zero_on_addr_misalign = false, bool custom_uncanonical = false, reg_t satp_read = 0){return 0;}
   virtual bool has_tval2() { return false; }
   virtual reg_t get_tval2() { return 0; }
   virtual bool has_tinst() { return false; }
@@ -47,7 +47,14 @@ class insn_trap_t : public trap_t
     : trap_t(which), gva(gva), tval(tval) {}
   bool has_gva() override { return gva; }
   bool has_tval() override { return true; }
-  reg_t get_tval() override { return tval; }
+  reg_t get_tval(bool save_ii_bits = false, bool zero_on_ebreak = false, bool zero_on_addr_misalign = false, bool custom_uncanonical = false, reg_t satp_read = 0)override
+  {
+    if ((cause() == CAUSE_ILLEGAL_INSTRUCTION) && (save_ii_bits == false))
+      return 0;
+    if ((cause() == CAUSE_BREAKPOINT) && (zero_on_ebreak == true))
+      return 0;
+    return tval;
+  }
  private:
   bool gva;
   reg_t tval;
@@ -59,8 +66,42 @@ class mem_trap_t : public trap_t
   mem_trap_t(reg_t which, bool gva, reg_t tval, reg_t tval2, reg_t tinst)
     : trap_t(which), gva(gva), tval(tval), tval2(tval2), tinst(tinst) {}
   bool has_gva() override { return gva; }
+  uint64_t custom_mtval_unc(reg_t value, int svBits)
+  {
+    uint64_t mask = (1ULL << svBits) - 1;
+    uint64_t final_val = value & mask;
+    uint64_t extractBit = (final_val >> (svBits-1)) & 0x01;
+    for (uint64_t i = svBits; i < 64; i++) {
+      final_val = final_val | (extractBit << i);
+    }
+    final_val = final_val ^ (1ULL << 63);
+    return final_val;
+  }
   bool has_tval() override { return true; }
-  reg_t get_tval() override { return tval; }
+  reg_t get_tval(bool save_ii_bits = false, bool zero_on_ebreak = false, bool zero_on_addr_misalign = false, bool custom_uncanonical = false, reg_t satp_read = 0)override
+  {
+    if ((cause() == CAUSE_MISALIGNED_FETCH) && (zero_on_addr_misalign == true))
+      return 0;
+    if (((cause() == CAUSE_STORE_PAGE_FAULT) || (cause() == CAUSE_LOAD_PAGE_FAULT)) && (custom_uncanonical == true))
+    {
+        satp_read = get_field(satp_read, SATP64_MODE);
+        if(satp_read == SATP_MODE_SV39){
+            if ((tval >= 0x0000004000000000) && (tval <= 0xFFFFFFBFFFFFFFFF)) {
+              return (custom_mtval_unc(tval, 39));}
+        }
+        else if(satp_read == SATP_MODE_SV48){
+            if ((tval >= 0x0000800000000000) && (tval <= 0xFFFF7FFFFFFFFFFF)) {
+              return (custom_mtval_unc(tval, 48));}
+        }
+        else if(satp_read == SATP_MODE_SV57){
+            if ((tval >= 0x0100000000000000) && (tval <= 0xFEFFFFFFFFFFFFFF)) {
+              return (custom_mtval_unc(tval, 57));}
+        }
+        else
+          return tval;
+    }
+    return tval;
+  }
   bool has_tval2() override { return true; }
   reg_t get_tval2() override { return tval2; }
   bool has_tinst() override { return true; }

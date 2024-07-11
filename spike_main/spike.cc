@@ -32,6 +32,27 @@ static void help(int exit_code = 1)
   fprintf(stderr, "  -m<a:m,b:n,...>       Provide memory regions of size m and n bytes\n");
   fprintf(stderr, "                          at base addresses a and b (with 4 KiB alignment)\n");
   fprintf(stderr, "  -d                    Interactive debug mode\n");
+  fprintf(stderr, "  --csr-cause-rw-mask=<m>                Bitmask of xCAUSE CSR fields which support read/writes [default -1]\n");
+  fprintf(stderr, "  --csr-jvt-rw-mask=<m>                  Bitmask of JVT CSR fields which support read/writes [default -1]\n");
+  fprintf(stderr, "  --csr-event-rw-mask=<m>                Bitmask of HPMEVENT CSR fields which support read/writes [default -1]\n");
+  fprintf(stderr, "  --csr-tval-save-ii-bits                Flag to tell if illegal opcode bits are logged in xTVAL CSR on an illegal instruction trap [default 0]\n");
+  fprintf(stderr, "  --csr-tval-zero-on-ebreak              Flag to tell if xTVAL CSR is set to zero on a software breakpoint exception trap [default 0]\n");
+  fprintf(stderr, "  --csr-tval-zero-on-addr-misalign       Flag to tell if xTVAL CSR is set to zero on a misaligned address exception trap [default 0]\n");
+  fprintf(stderr, "  --csr-tval-custom-uncanonical          Mask to tell if xTVAL CSR should take the custom policy for uncanonical page faults [default 0]\n");
+  fprintf(stderr, "  --csr-ie-zero-mask=<m>                 Bitmask of xIE fields set to read only zero value [default 0]\n");
+  fprintf(stderr, "  --csr-medeleg-atable-mask=<m>          Bitmask of MEDELEG fields the trap corresponding to which can be delegated [default 0]\n");
+  fprintf(stderr, "  --csr-mideleg-atable-mask=<m>          Bitmask of MIDELEG fields the trap corresponding to which can be delegated [default 0]\n");
+  fprintf(stderr, "  --csr-hedeleg-atable-mask=<m>          Bitmask of HEDELEG fields the trap corresponding to which can be delegated [default 0]\n");
+  fprintf(stderr, "  --csr-hideleg-atable-mask=<m>          Bitmask of HIDELEG fields the trap corresponding to which can be delegated [default 0]\n");
+  fprintf(stderr, "  --csr-sedeleg-atable-mask=<m>          Bitmask of SEDELEG fields the trap corresponding to which can be delegated [default 0]\n");
+  fprintf(stderr, "  --csr-sideleg-atable-mask=<m>          Bitmask of SIDELEG fields the trap corresponding to which can be delegated [default 0]\n");
+  fprintf(stderr, "  --csr-mideleg-vs-mask-ro-one           Flag to tell if the mask corresponding to VS interrupts are read only one [default 0]\n");
+  fprintf(stderr, "  --csr-status-fs-ro-zero                Flag to tell if xSTATUS.FS field is set to read-only zero [default 0]\n");
+  fprintf(stderr, "  --csr-status-vs-ro-zero                Flag to tell if xSTATUS.VS field is set to read-only zero [default 0]\n");
+  fprintf(stderr, "  --csr-status-ext-off-on-misa-clr       Flag to tell if extension status fields in xSTATUS CSR are expected to get set to zero (OFF) on disabling extension in MISA [default 0]\n");
+  fprintf(stderr, "  --csr-envcfg-stce-ro-one               Flag to tell if xENVCFG.STCE field is set to read-only one [default 0]\n");
+  fprintf(stderr, "  --csr-envcfg-fiom-ro-one               Flag to tell if xENVCFG.FIOM field is set to read-only one [default 0]\n");
+  fprintf(stderr, "  --csr-hpm-absent-acc-illegal           Flag to tell if accessing HPM control status registers should result in an illegal exception [default false]\n");
   fprintf(stderr, "  -g                    Track histogram of PCs\n");
   fprintf(stderr, "  -l                    Generate a log of execution\n");
 #ifdef HAVE_BOOST_ASIO
@@ -349,6 +370,29 @@ int main(int argc, char** argv)
   bool use_rbb = false;
   unsigned dmi_rti = 0;
   reg_t blocksz = 64;
+
+  size_t csr_cause_rw_mask = ~(size_t)0;
+  size_t csr_jvt_rw_mask   = ~(size_t)0;
+  size_t csr_event_rw_mask = ~(size_t)0;
+  bool csr_tval_save_ii_bits = false;
+  bool csr_tval_zero_on_ebreak = false;
+  bool csr_tval_zero_on_addr_misalign = false;
+  size_t csr_tval_custom_uncanonical = 0;
+  size_t csr_ie_zero_mask = (size_t)0;
+  size_t csr_medelegatable_mask = (size_t)0;
+  size_t csr_midelegatable_mask = (size_t)0;
+  size_t csr_hedelegatable_mask = (size_t)0;
+  size_t csr_hidelegatable_mask = (size_t)0;
+  size_t csr_sedelegatable_mask = (size_t)0;
+  size_t csr_sidelegatable_mask = (size_t)0;
+  bool csr_mideleg_vs_mask_ro_one = false;
+  bool csr_status_fs_ro_zero = false;
+  bool csr_status_vs_ro_zero = false;
+  bool csr_status_ext_off_on_misa_clr = false;
+  bool csr_envcfg_stce_ro_one = false;
+  bool csr_envcfg_fiom_ro_one = false;
+  bool csr_hpm_absent_acc_illegal = false;
+  
   debug_module_config_t dm_config;
   cfg_arg_t<size_t> nprocs(1);
 
@@ -464,6 +508,28 @@ int main(int argc, char** argv)
     }
   });
 
+  parser.option(0, "csr-cause-rw-mask", 1, [&](const char* s){csr_cause_rw_mask = strtoull(s, 0, 0);});
+  parser.option(0, "csr-jvt-rw-mask", 1, [&](const char* s){csr_jvt_rw_mask = strtoull(s, 0, 0);});
+  parser.option(0, "csr-event-rw-mask", 1, [&](const char* s){csr_event_rw_mask = strtoull(s, 0, 0);});
+  parser.option(0, "csr-tval-save-ii-bits", 0, [&](const char UNUSED *s){csr_tval_save_ii_bits = true;});
+  parser.option(0, "csr-tval-zero-on-ebreak", 0, [&](const char UNUSED *s){csr_tval_zero_on_ebreak = true;});
+  parser.option(0, "csr-tval-zero-on-addr-misalign", 0, [&](const char UNUSED *s){csr_tval_zero_on_addr_misalign = true;});
+  parser.option(0, "csr-tval-custom-uncanonical", 1, [&](const char *s){csr_tval_custom_uncanonical = strtoull(s, 0, 0);});
+  parser.option(0, "csr-ie-zero-mask", 1, [&](const char *s){csr_ie_zero_mask = strtoull(s, 0, 0);});
+  parser.option(0, "csr-medeleg-atable-mask", 1, [&](const char* s){csr_medelegatable_mask = strtoull(s, 0, 0);});
+  parser.option(0, "csr-mideleg-atable-mask", 1, [&](const char* s){csr_midelegatable_mask = strtoull(s, 0, 0);});
+  parser.option(0, "csr-hedeleg-atable-mask", 1, [&](const char* s){csr_hedelegatable_mask = strtoull(s, 0, 0);});
+  parser.option(0, "csr-hideleg-atable-mask", 1, [&](const char* s){csr_hidelegatable_mask = strtoull(s, 0, 0);});
+  parser.option(0, "csr-sedeleg-atable-mask", 1, [&](const char* s){csr_sedelegatable_mask = strtoull(s, 0, 0);});
+  parser.option(0, "csr-sideleg-atable-mask", 1, [&](const char* s){csr_sidelegatable_mask = strtoull(s, 0, 0);});
+  parser.option(0, "csr-mideleg-vs-mask-ro-one", 0, [&](const char UNUSED *s){csr_mideleg_vs_mask_ro_one = true;});
+  parser.option(0, "csr-status-fs-ro-zero", 0, [&](const char UNUSED *s){csr_status_fs_ro_zero = true;});
+  parser.option(0, "csr-status-vs-ro-zero", 0, [&](const char UNUSED *s){csr_status_vs_ro_zero = true;});
+  parser.option(0, "csr-status-ext-off-on-misa-clr", 0, [&](const char UNUSED *s){csr_status_ext_off_on_misa_clr = true;});
+  parser.option(0, "csr-envcfg-stce-ro-one", 0, [&](const char UNUSED *s){csr_envcfg_stce_ro_one = true;});
+  parser.option(0, "csr-envcfg-fiom-ro-one", 0, [&](const char UNUSED *s){csr_envcfg_fiom_ro_one = true;});
+  parser.option(0, "csr-hpm-absent-acc-illegal", 0, [&](const char UNUSED *s){csr_hpm_absent_acc_illegal = true;});
+
   auto argv1 = parser.parse(argv);
   std::vector<std::string> htif_args(argv1, (const char*const*)argv + argc);
 
@@ -549,6 +615,32 @@ int main(int argc, char** argv)
     for (auto e : extensions)
       s.get_core(i)->register_extension(e());
     s.get_core(i)->get_mmu()->set_cache_blocksz(blocksz);
+
+    s.get_core(i)->get_csr_props()->cause_rw_mask = csr_cause_rw_mask;
+    s.get_core(i)->get_csr_props()->jvt_rw_mask = csr_jvt_rw_mask;
+    s.get_core(i)->get_csr_props()->event_rw_mask = csr_event_rw_mask;
+    
+    s.get_core(i)->get_csr_props()->tval_save_ii_bits = csr_tval_save_ii_bits;
+    s.get_core(i)->get_csr_props()->tval_zero_on_ebreak = csr_tval_zero_on_ebreak;
+    s.get_core(i)->get_csr_props()->tval_zero_on_addr_misalign = csr_tval_zero_on_addr_misalign;
+    s.get_core(i)->get_csr_props()->tval_custom_uncanonical = csr_tval_custom_uncanonical;
+    
+    s.get_core(i)->get_csr_props()->ie_zero_mask = csr_ie_zero_mask;
+    
+    s.get_core(i)->get_csr_props()->medelegatable_mask = csr_medelegatable_mask;
+    s.get_core(i)->get_csr_props()->midelegatable_mask = csr_midelegatable_mask;
+    s.get_core(i)->get_csr_props()->hedelegatable_mask = csr_hedelegatable_mask;
+    s.get_core(i)->get_csr_props()->hidelegatable_mask = csr_hidelegatable_mask;
+    s.get_core(i)->get_csr_props()->sedelegatable_mask = csr_sedelegatable_mask;
+    s.get_core(i)->get_csr_props()->sidelegatable_mask = csr_sidelegatable_mask;
+    
+    s.get_core(i)->get_csr_props()->mideleg_vs_mask_ro_one = csr_mideleg_vs_mask_ro_one;
+    s.get_core(i)->get_csr_props()->status_fs_ro_zero = csr_status_fs_ro_zero;
+    s.get_core(i)->get_csr_props()->status_vs_ro_zero = csr_status_vs_ro_zero;
+    s.get_core(i)->get_csr_props()->status_ext_off_on_misa_clr = csr_status_ext_off_on_misa_clr;
+    s.get_core(i)->get_csr_props()->envcfg_stce_ro_one = csr_envcfg_stce_ro_one;
+    s.get_core(i)->get_csr_props()->envcfg_fiom_ro_one = csr_envcfg_fiom_ro_one;
+    s.get_core(i)->get_csr_props()->hpm_absent_acc_illegal = csr_hpm_absent_acc_illegal;
   }
 
   s.set_debug(debug);

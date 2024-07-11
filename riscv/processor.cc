@@ -979,7 +979,8 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
     s = set_field(s, MSTATUS_UIE, 0);
     state.ustatus->write(s);
     set_privilege(PRV_U, false);
-      if (debug && log_commits) {
+      if (debug && get_log_commits_enabled()) { // fixme confirm with Valtrix
+        std::stringstream r; // fixme ask Valtrix
         r << std::hex
           << "c41_uepc 0x"   << std::setfill('0') << std::setw(max_xlen/4) << zext(state.uepc->read(), max_xlen) << " "
           << "c42_ucause 0x" << std::setfill('0') << std::setw(max_xlen/4) << zext(state.ucause->read(), max_xlen) << " "

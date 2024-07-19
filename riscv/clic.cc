@@ -32,26 +32,27 @@
 //   0x4FFE         1B/input    RW        clicintattr[4095]
 //   0x4FFF         1B/input    RW        clicintctl[4095]
 
-#define CLIC_SMCLICCONFIG_EXT_OFFSET  0X0000
+#define MCLIC_SMCLICCONFIG_EXT_OFFSET  0X0000
 
-#define CLIC_RESERVED1_BASE_OFFSET    0X0004
-#define CLIC_RESERVED1_TOP_OFFSET     0X003F
+#define MCLIC_RESERVED1_BASE_OFFSET    0X0004
+#define MCLIC_RESERVED1_TOP_OFFSET     0X003F
 
-#define CLIC_INTTRIG_ADDR_BASE_OFFSET 0X0040
-#define CLIC_INTTRIG_ADDR_TOP_OFFSET  0X00BC
+#define MCLIC_INTTRIG_ADDR_BASE_OFFSET 0X0040
+#define MCLIC_INTTRIG_ADDR_TOP_OFFSET  0X00BC
 
-#define CLIC_RESEVED2_BASE_OFFSET     0X00C0
-#define CLIC_RESEVED2_TOP_OFFSET      0X07FF
+#define MCLIC_RESEVED2_BASE_OFFSET     0X00C0
+#define MCLIC_RESEVED2_TOP_OFFSET      0X07FF
 
-#define CLIC_CUSTOM_BASE_OFFSET       0X0800
-#define CLIC_CUSTOM_TOP_OFFSET        0X0FFF
+#define MCLIC_CUSTOM_BASE_OFFSET       0X0800
+#define MCLIC_CUSTOM_TOP_OFFSET        0X0FFF
 
-#define CLIC_INTTBL_ADDR_BASE_OFFSET  0X1000
-#define     CLIC_INTIP_BYTE_OFFSET     0X0
-#define     CLIC_INTIE_BYTE_OFFSET     0X1
-#define     CLIC_INTATTR_BYTE_OFFSET   0X2
-#define     CLIC_INTCTL_BYTE_OFFSET    0X3
-#define CLIC_INTTBL_ADDR_TOP_OFFSET   0X4FFC
+#define MCLIC_INTTBL_ADDR_BASE_OFFSET  0X1000
+#define     MCLIC_INTIP_BYTE_OFFSET     0
+#define     MCLIC_INTIE_BYTE_OFFSET     1
+#define     MCLIC_INTATTR_BYTE_OFFSET   2
+#define     MCLIC_INTCTL_BYTE_OFFSET    3
+#define MCLIC_INTTBL_ADDR_TOP_OFFSET   0X4FFC
+
 
 clic_t::CLICINTTRIG_UNION_T clic_t::clicinttrig[CLIC_NUM_TRIGGER]   = {0};
 uint8_t                     clic_t::clicintip[CLIC_NUM_INTERRUPT]   = {0};
@@ -65,7 +66,7 @@ bool clic_t::load(reg_t addr, size_t len, uint8_t *bytes)  {
 
   tick(0);
 
-  if ((addr >= CLIC_SMCLICCONFIG_EXT_OFFSET) && (addr < CLIC_RESERVED1_BASE_OFFSET)) {
+  if ((addr >= MCLIC_SMCLICCONFIG_EXT_OFFSET) && (addr < MCLIC_RESERVED1_BASE_OFFSET)) {
     if (len == 8) {
       // Implement double-word loads as a pair of word loads
       return load(addr, 4, bytes) && load(addr + 4, 4, bytes + 4);
@@ -76,7 +77,7 @@ bool clic_t::load(reg_t addr, size_t len, uint8_t *bytes)  {
       bytes[indx] = 0;
     }
     return true;
-  } else if ((addr >= CLIC_RESERVED1_BASE_OFFSET) && (addr < CLIC_INTTRIG_ADDR_BASE_OFFSET)) {
+  } else if ((addr >= MCLIC_RESERVED1_BASE_OFFSET) && (addr < MCLIC_INTTRIG_ADDR_BASE_OFFSET)) {
     if (len == 8) {
       // Implement double-word loads as a pair of word loads
       return load(addr, 4, bytes) && load(addr + 4, 4, bytes + 4);
@@ -86,19 +87,19 @@ bool clic_t::load(reg_t addr, size_t len, uint8_t *bytes)  {
       bytes[indx] = 0;
     }
     return true;
-  } else if ((addr >= CLIC_INTTRIG_ADDR_BASE_OFFSET) && (addr < CLIC_RESEVED2_BASE_OFFSET)) {
+  } else if ((addr >= MCLIC_INTTRIG_ADDR_BASE_OFFSET) && (addr < MCLIC_RESEVED2_BASE_OFFSET)) {
     if (len == 8) {
       // Implement double-word loads as a pair of word loads
       return load(addr, 4, bytes) && load(addr + 4, 4, bytes + 4);
     }
     /* load from clic interrupt trigger memory mapped registers */
-    int index = addr - CLIC_INTTRIG_ADDR_BASE_OFFSET;
+    int index = addr - MCLIC_INTTRIG_ADDR_BASE_OFFSET;
     for (int i = 0; i < len; i++)
     {
       bytes[i] = clicinttrig[index].all >> i*8;
     }
     return true;
-  } else if ((addr >= CLIC_CUSTOM_BASE_OFFSET ) && (addr < CLIC_INTTBL_ADDR_BASE_OFFSET)) {
+  } else if ((addr >= MCLIC_CUSTOM_BASE_OFFSET ) && (addr < MCLIC_INTTBL_ADDR_BASE_OFFSET)) {
     if (len == 8) {
       // Implement double-word loads as a pair of word loads
       return load(addr, 4, bytes) && load(addr + 4, 4, bytes + 4);
@@ -108,31 +109,27 @@ bool clic_t::load(reg_t addr, size_t len, uint8_t *bytes)  {
       bytes[indx] = 0;
     }
     return true;
-  } else if ((addr >= CLIC_INTTBL_ADDR_BASE_OFFSET ) && (addr < (CLIC_INTTBL_ADDR_TOP_OFFSET + 4))) {
+  } else if ((addr >= MCLIC_INTTBL_ADDR_BASE_OFFSET ) && (addr < (MCLIC_INTTBL_ADDR_TOP_OFFSET + 4))) {
     if (len == 8) {
       // Implement double-word loads as a pair of word loads
       return load(addr, 4, bytes) && load(addr + 4, 4, bytes + 4);
     }
-    int index = ((addr & 0XFFFFFFFFFFFFFFFC) - CLIC_INTTBL_ADDR_BASE_OFFSET) / 4;
+    int index = ((addr & 0XFFFFFFFFFFFFFFFC) - MCLIC_INTTBL_ADDR_BASE_OFFSET) / 4;
     int byte_offset = addr & 0x3;
     for (int i = byte_offset; i < byte_offset + len; i++)
     {
       switch (i)
       {
-      case 0:
-        /* clicintip */
+      case MCLIC_INTIP_BYTE_OFFSET:
         bytes[i] = clicintip[index];
         break;
-      case 1:
-        /* clicintie */
+      case MCLIC_INTIE_BYTE_OFFSET:
         bytes[i] = clicintie[index];
         break;
-      case 2:
-        /* clicintattr */
+      case MCLIC_INTATTR_BYTE_OFFSET:
         bytes[i] = clicintattr[index].all;
         break;
-      case 3:
-        /* clicintctl */
+      case MCLIC_INTCTL_BYTE_OFFSET:
         bytes[i] = clicintctl[index];
         break;
       default:
@@ -141,10 +138,7 @@ bool clic_t::load(reg_t addr, size_t len, uint8_t *bytes)  {
       }
     }
     return true;
-  } else {
-    return false;
   }
-  return true;
 }
 
 bool clic_t::store(reg_t addr, size_t len, const uint8_t* bytes)  {
@@ -154,26 +148,26 @@ if (len > 8) {
 
   tick(0);
 
-  if ((addr >= CLIC_SMCLICCONFIG_EXT_OFFSET) && (addr < CLIC_RESERVED1_BASE_OFFSET)) {
+  if ((addr >= MCLIC_SMCLICCONFIG_EXT_OFFSET) && (addr < MCLIC_RESERVED1_BASE_OFFSET)) {
     if (len == 8) {
       // Implement double-word stores as a pair of word stores
       return store(addr, 4, bytes) && store(addr + 4, 4, bytes + 4);
     }
     // FIXME add cliccfg register when extension smclicconfig is enabled
     return false;
-  } else if ((addr >= CLIC_RESERVED1_BASE_OFFSET) && (addr < CLIC_INTTRIG_ADDR_BASE_OFFSET)) {
+  } else if ((addr >= MCLIC_RESERVED1_BASE_OFFSET) && (addr < MCLIC_INTTRIG_ADDR_BASE_OFFSET)) {
     if (len == 8) {
       // Implement double-word stores as a pair of word stores
       return store(addr, 4, bytes) && store(addr + 4, 4, bytes + 4);
     }
     return false;
-  } else if ((addr >= CLIC_INTTRIG_ADDR_BASE_OFFSET) && (addr < CLIC_RESEVED2_BASE_OFFSET)) {
+  } else if ((addr >= MCLIC_INTTRIG_ADDR_BASE_OFFSET) && (addr < MCLIC_RESEVED2_BASE_OFFSET)) {
     if (len == 8) {
       // Implement double-word stores as a pair of word stores
       return store(addr, 4, bytes) && store(addr + 4, 4, bytes + 4);
     }
     /* store to clic interrupt trigger memory mapped registers */
-    int index = addr - CLIC_INTTRIG_ADDR_BASE_OFFSET;
+    int index = addr - MCLIC_INTTRIG_ADDR_BASE_OFFSET;
     for (int idx = 0; idx < len; idx++)
     {
       // assuming that address is 32 bit aligned
@@ -181,19 +175,19 @@ if (len > 8) {
                                (uint32_t(bytes[idx]) << (idx * 8));
     }
     return true;
-  } else if ((addr >= CLIC_CUSTOM_BASE_OFFSET ) && (addr < CLIC_INTTBL_ADDR_BASE_OFFSET)) {
+  } else if ((addr >= MCLIC_CUSTOM_BASE_OFFSET ) && (addr < MCLIC_INTTBL_ADDR_BASE_OFFSET)) {
     if (len == 8) {
       // Implement double-word stores as a pair of word stores
       return store(addr, 4, bytes) && store(addr + 4, 4, bytes + 4);
     }
     return false;
-  } else if ((addr >= CLIC_INTTBL_ADDR_BASE_OFFSET ) && (addr < (CLIC_INTTBL_ADDR_TOP_OFFSET + 4))) {
+  } else if ((addr >= MCLIC_INTTBL_ADDR_BASE_OFFSET ) && (addr < (MCLIC_INTTBL_ADDR_TOP_OFFSET + 4))) {
     if (len == 8) {
       // Implement double-word stores as a pair of word stores
       return store(addr, 4, bytes) && store(addr + 4, 4, bytes + 4);
     }
     /* store to clic interrupt table memory mapped registers */
-    int index = ((addr & 0XFFFFFFFFFFFFFFFC) - CLIC_INTTBL_ADDR_BASE_OFFSET) / 4;
+    int index = ((addr & 0XFFFFFFFFFFFFFFFC) - MCLIC_INTTBL_ADDR_BASE_OFFSET) / 4;
     int byte_offset = addr & 0x3;
     for (int idx = byte_offset; idx < len; idx++)
     {
@@ -352,41 +346,65 @@ void clic_t::take_clic_trap(trap_t& t, reg_t epc) {  // fixme - Implementation f
   }
 
   // SMCLIC does not support vectored operation -- fixme when SMCLICSHV is implemented
-  const reg_t trap_handler_address = (p->state.mtvec->read() & ~(reg_t)63);
-
-  const reg_t rnmi_trap_handler_address = 0;
-  const bool nmie = !(p->state.mnstatus && !get_field(p->state.mnstatus->read(), MNSTATUS_NMIE));
-  
-  p->state.pc = !nmie ? rnmi_trap_handler_address : trap_handler_address;
-  
-  p->state.mepc->write(epc);
-  
+  reg_t trap_handler_address;
   prev_priv = curr_priv;
   prev_ie   = curr_ie;
   prev_level = curr_level;
-
   reg_t cause = t.cause();
-  cause = set_field(cause,MCAUSE_MPP,prev_priv);
-  cause = set_field(cause,MCAUSE_MPIE,prev_ie);
   cause = set_field(cause,MCAUSE_MPIL, prev_level);
-  p->state.mcause->write(cause);
-  
+  reg_t  xintstatus = p->state.csrmap[CSR_MINTSTATUS]->read();
+  reg_t s;  
+  switch (p->CLIC.clic_npriv)
+  {
+  case PRV_U:
+    break;
+
+  case PRV_S:
+    break;
+
+  case PRV_M:
+    trap_handler_address = (p->state.mtvec->read() & ~(reg_t)63);
+    p->state.mepc->write(epc);
+    xintstatus = set_field(xintstatus, MINTSTATUS_MIL, p->CLIC.clic_nlevel);
+    p->state.csrmap[CSR_MINTSTATUS]->write(xintstatus);
+    p->state.mcause->write(cause);
   p->state.mtval->write(t.get_tval());
   p->state.mtval2->write(t.get_tval2());
-
   p->state.mtinst->write(t.get_tinst());
-
-  reg_t s = p->state.mstatus->read();
+    s = p->state.mstatus->read();
   s = set_field(s, MSTATUS_MPIE, prev_ie);
   s = set_field(s, MSTATUS_MPP, prev_priv);
   s = set_field(s, MSTATUS_MIE, 0);
   s = set_field(s, MSTATUS_MPV, curr_virt);
   s = set_field(s, MSTATUS_GVA, t.has_gva());
   s = set_field(s, MSTATUS_MPELP, p->state.elp);
+    p->state.mstatus->write(s);
+    if (p->state.mstatush) p->state.mstatush->write(s >> 32);  // log mstatush change
+    break;
+
+  default:
+    break;
+  } 
+
+  const reg_t rnmi_trap_handler_address = 0;
+  const bool nmie = !(p->state.mnstatus && !get_field(p->state.mnstatus->read(), MNSTATUS_NMIE));
+  
+  p->state.pc = !nmie ? rnmi_trap_handler_address : trap_handler_address;
+  
   p->state.elp = elp_t::NO_LP_EXPECTED;
-  p->state.mstatus->write(s);
-  if (p->state.mstatush) p->state.mstatush->write(s >> 32);  // log mstatush change
+
+  switch (p->CLIC.clic_npriv)
+  {
+  case PRV_U:
+    p->set_privilege(PRV_U, false);
+    break;
+  case PRV_M:
   p->set_privilege(PRV_M, false);
+    break;
+  
+  default:
+    break;
+  }
 
 }
 
@@ -401,6 +419,7 @@ void clic_t::reset() {
 
   reg_t mintstatus = csrmap[CSR_MINTSTATUS]->read();
   mintstatus = mintstatus & ~MINTSTATUS_MIL;
+  mintstatus = mintstatus & ~MINTSTATUS_UIL;
   csrmap[CSR_MINTSTATUS]->write(mintstatus);
   reg_t mcause = csrmap[CSR_MCAUSE]->read();
   mcause = mcause & ~MCAUSE_MPIL;
@@ -434,11 +453,11 @@ std::string clic_generate_dts(const sim_t* sim,  const std::vector<std::string>&
        "      interrupts-extended = <" << std::dec;
   for (size_t i = 0; i < sim->get_cfg().nprocs(); i++)
     s << "&CPU" << i << "_intc 3 &CPU" << i << "_intc 7 ";
-  reg_t clicbs = MCLIC_BASE;
-  reg_t clicsz = MCLIC_SIZE;
+  reg_t mclicbs = MCLIC_BASE;
+  reg_t mclicsz = MCLIC_SIZE;
   s << std::hex << ">;\n"
-    "      reg = <0x" << (clicbs >> 32) << " 0x" << (clicbs & (uint32_t)-1) <<
-    " 0x" << (clicsz >> 32) << " 0x" << (clicsz & (uint32_t)-1) << ">;\n"
+    "      reg = <0x" << (mclicbs >> 32) << " 0x" << (mclicbs & (uint32_t)-1) <<
+    " 0x" << (mclicsz >> 32) << " 0x" << (mclicsz & (uint32_t)-1) << ">;\n"
     "    };\n";
   return s.str();
 }

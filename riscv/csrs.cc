@@ -732,7 +732,10 @@ mip_or_mie_csr_t::mip_or_mie_csr_t(processor_t* const proc, const reg_t addr):
 
 reg_t mip_or_mie_csr_t::read() const noexcept {
   if ((state->csrmap[CSR_MTVEC]->read() & (reg_t)0x3F) == (reg_t)0x03) {
+    if (address == CSR_MIE)
+    {
     return 0;
+    }
   } else {
     return val;
   }
@@ -754,7 +757,10 @@ mip_csr_t::mip_csr_t(processor_t* const proc, const reg_t addr):
 
 reg_t mip_csr_t::read() const noexcept {
   if ((state->csrmap[CSR_MTVEC]->read() & (reg_t)0x3F) == (reg_t)0x03) {
+    if (address == CSR_MIP)
+    {
     return 0;
+    }
   } else {
     return val | state->hvip->basic_csr_t::read();
   }
@@ -1931,9 +1937,7 @@ intstatus_t::intstatus_t(processor_t* const proc, const reg_t addr):
   }
 
 reg_t intstatus_t::read() const noexcept {
-  reg_t val = 0;
-  val = (proc->CLIC.curr_level << 24);  // smclic
-  // add additional values for sil and uil when implemented
+  reg_t val = basic_csr_t::read();
   return val;
 }
 
@@ -2028,15 +2032,17 @@ reg_t scratchcswl_t::read() const noexcept {
 }
 bool scratchcswl_t::unlogged_write(const reg_t val) noexcept {
   reg_t prev_val = this->val;
-  if (((state->csrmap[CSR_MCAUSE]->read()     & MCAUSE_MPIL) == 0) != 
-      ((state->csrmap[CSR_MINTSTATUS]->read() & MINTSTATUS_MIL) == 0))
+  if (address == CSR_MSCRATCHCSWL)
   {
-    rd_val = prev_val;
-    this->val = val;
-  } else {
-    rd_val = val;
+    if (((state->csrmap[CSR_MCAUSE]->read()     & MCAUSE_MPIL) == 0) != 
+        ((state->csrmap[CSR_MINTSTATUS]->read() & MINTSTATUS_MIL) == 0))
+    {
+      rd_val = prev_val;
+      this->val = val;
+    } else {
+      rd_val = val;
+    }
   }
-  
   return true;
 }
 

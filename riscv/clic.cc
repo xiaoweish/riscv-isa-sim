@@ -3,6 +3,7 @@
 #include "arith.h"
 #include "dts.h"
 #include "sim.h"
+#include "mmu.h"
 
 
 // M-mode CLIC memory map - 12/19/2023 - version 0.9-draft
@@ -59,6 +60,19 @@ uint8_t                     clic_t::clicintip[CLIC_NUM_INTERRUPT]   = {0};
 uint8_t                     clic_t::clicintie[CLIC_NUM_INTERRUPT]   = {0};
 clic_t::CLICINTATTR_UNION_T clic_t::clicintattr[CLIC_NUM_INTERRUPT] = {0};
 uint8_t                     clic_t::clicintctl[CLIC_NUM_INTERRUPT]  = {0};
+
+void clic_t::set_smclic_enabled(bool val) {
+  SMCLIC_enabled = val;
+}
+void clic_t::set_smclicshv_enabled(bool val) {
+  SMCLICSHV_enabled = val;
+}
+bool clic_t::get_smclic_enabled() {
+  return SMCLIC_enabled;
+}
+bool clic_t::get_smclicshv_enabled() {
+  return SMCLICSHV_enabled;
+}
 
 bool clic_t::load(reg_t addr, size_t len, uint8_t *bytes)  {
   if (len > 8)
@@ -138,6 +152,10 @@ bool clic_t::load(reg_t addr, size_t len, uint8_t *bytes)  {
       }
     }
     return true;
+  } else if ((addr >= MCLIC_INTTBL_ADDR_TOP_OFFSET + 4) && (addr + len <= MCLIC_SIZE)) {
+    return true;
+  } else {
+    return false;
   }
 }
 
@@ -147,7 +165,7 @@ if (len > 8) {
   }
 
   tick(0);
-
+  
   if ((addr >= MCLIC_SMCLICCONFIG_EXT_OFFSET) && (addr < MCLIC_RESERVED1_BASE_OFFSET)) {
     if (len == 8) {
       // Implement double-word stores as a pair of word stores
@@ -200,7 +218,13 @@ if (len > 8) {
         clicintie[index] = bytes[idx];
         break;
       case 2:
-        clicintattr[index].all = bytes[idx];
+        if (SMCLICSHV_enabled)
+        {
+          clicintattr[index].all = bytes[idx];
+        } else
+        {
+          clicintattr[index].all = bytes[idx] & ~uint8_t(1);
+        }
         break;
       case 3:
         clicintctl[index] = bytes[idx];
@@ -209,6 +233,8 @@ if (len > 8) {
         break;
       }
     }
+    return true;
+  } else if ((addr >= (MCLIC_INTTBL_ADDR_TOP_OFFSET + 4) ) && (addr + len <= MCLIC_SIZE)) {
     return true;
   } else {
     return false;
@@ -345,7 +371,6 @@ void clic_t::take_clic_trap(trap_t& t, reg_t epc) {  // fixme - Implementation f
     // fixme - code to handle exception delegation goes here
   }
 
-  // SMCLIC does not support vectored operation -- fixme when SMCLICSHV is implemented
   reg_t trap_handler_address;
   prev_priv = curr_priv;
   prev_ie   = curr_ie;
@@ -363,21 +388,40 @@ void clic_t::take_clic_trap(trap_t& t, reg_t epc) {  // fixme - Implementation f
     break;
 
   case PRV_M:
-    trap_handler_address = (p->state.mtvec->read() & ~(reg_t)63);
+    if (clicintattr[clic_id].shv)
+    {
+      xlate_flags_t my_xlate_flags = {0,0,0,0};
+      reg_t mtvt_val = p->state.csrmap[CSR_MTVT]->read();
+      auto xlen = p->isa->get_max_xlen();
+      reg_t mtvt_val_offset = mtvt_val + xlen/8*(cause & (reg_t)0xFFF);
+      if (xlen == 32)
+      {
+        trap_handler_address = p->get_mmu()->load<uint32_t>(mtvt_val_offset,my_xlate_flags);
+      }
+      else
+      {
+        trap_handler_address = p->get_mmu()->load<uint64_t>(mtvt_val_offset,my_xlate_flags);
+      }
+    }
+    else
+    {
+      trap_handler_address = (p->state.mtvec->read() & ~(reg_t)63);
+    }
+    
     p->state.mepc->write(epc);
     xintstatus = set_field(xintstatus, MINTSTATUS_MIL, p->CLIC.clic_nlevel);
     p->state.csrmap[CSR_MINTSTATUS]->write(xintstatus);
     p->state.mcause->write(cause);
-  p->state.mtval->write(t.get_tval());
-  p->state.mtval2->write(t.get_tval2());
-  p->state.mtinst->write(t.get_tinst());
+    p->state.mtval->write(t.get_tval());
+    p->state.mtval2->write(t.get_tval2());
+    p->state.mtinst->write(t.get_tinst());
     s = p->state.mstatus->read();
-  s = set_field(s, MSTATUS_MPIE, prev_ie);
-  s = set_field(s, MSTATUS_MPP, prev_priv);
-  s = set_field(s, MSTATUS_MIE, 0);
-  s = set_field(s, MSTATUS_MPV, curr_virt);
-  s = set_field(s, MSTATUS_GVA, t.has_gva());
-  s = set_field(s, MSTATUS_MPELP, p->state.elp);
+    s = set_field(s, MSTATUS_MPIE, prev_ie);
+    s = set_field(s, MSTATUS_MPP, prev_priv);
+    s = set_field(s, MSTATUS_MIE, 0);
+    s = set_field(s, MSTATUS_MPV, curr_virt);
+    s = set_field(s, MSTATUS_GVA, t.has_gva());
+    s = set_field(s, MSTATUS_MPELP, p->state.elp);
     p->state.mstatus->write(s);
     if (p->state.mstatush) p->state.mstatush->write(s >> 32);  // log mstatush change
     break;
@@ -385,7 +429,7 @@ void clic_t::take_clic_trap(trap_t& t, reg_t epc) {  // fixme - Implementation f
   default:
     break;
   } 
-
+ 
   const reg_t rnmi_trap_handler_address = 0;
   const bool nmie = !(p->state.mnstatus && !get_field(p->state.mnstatus->read(), MNSTATUS_NMIE));
   
@@ -467,7 +511,7 @@ REGISTER_DEVICE(clic, clic_parse_from_fdt, clic_generate_dts)
 clic_t::clic_t(/* args */) :
   p(0),
   sim(0) {
-}
+  }
 
 clic_t::~clic_t()
 {

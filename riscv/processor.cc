@@ -45,8 +45,17 @@ processor_t::processor_t(const isa_parser_t *isa, const cfg_t *cfg,
   if (extension_enabled(EXT_SMCLIC)) {
     CLIC.p = this;
     CLIC.sim = sim;
+    CLIC.set_smclic_enabled(true);
+    if (extension_enabled(EXT_SMCLICSHV))
+    {
+      CLIC.set_smclicshv_enabled(true);
+    } else {
+      CLIC.set_smclicshv_enabled(false);
+    }
+  } else {
+      CLIC.set_smclic_enabled(false);
+      CLIC.set_smclicshv_enabled(false);
   }
-  
 
 #ifndef HAVE_INT128
   if (isa->extension_enabled('V')) {
@@ -859,7 +868,6 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
 {
 
   if ((state.mtvec->read() & (reg_t)0x3F) == (reg_t)0x03)
-  //if (extension_enabled(EXT_SMCLIC))
   {
     CLIC.take_clic_trap(t,epc);
     return;

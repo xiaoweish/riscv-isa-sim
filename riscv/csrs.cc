@@ -1916,6 +1916,7 @@ tvt_t::tvt_t(processor_t* const proc, const reg_t addr):
 
 reg_t tvt_t::read() const noexcept {
   reg_t val = basic_csr_t::read();
+  val = val & ~(reg_t)0x3F;
   return val;
 }
  
@@ -1927,7 +1928,6 @@ void tvt_t::verify_permissions(insn_t insn, bool write) const {
 }
 
 bool tvt_t::unlogged_write(const reg_t val) noexcept {
-//  return basic_csr_t::unlogged_write(val & ~(reg_t)0x3F);
   return basic_csr_t::unlogged_write(val);
 }
 

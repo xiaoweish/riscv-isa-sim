@@ -37,6 +37,9 @@ extern device_factory_t* plic_factory;
 extern device_factory_t* ns16550_factory;
 extern device_factory_t* clic_factory;
 
+bool clic_t::SMCLIC_enabled = false;
+bool clic_t:: SMCLICSHV_enabled = false;
+
 sim_t::sim_t(const cfg_t *cfg, bool halted,
              std::vector<std::pair<reg_t, abstract_mem_t*>> mems,
              const std::vector<device_factory_sargs_t>& plugin_device_factories,

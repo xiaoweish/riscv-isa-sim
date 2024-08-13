@@ -37,6 +37,10 @@ public:
   reg_t prev_priv;  // previous privilege mode
   bool prev_ie;    // previous interrupt enable ie = (xstatus.xie & clicintie[i])
   reg_t prev_level; // previous interrupt level  L = max(xintstatus.xil, xintthresh.th)
+
+  static bool SMCLIC_enabled;
+  static bool SUCLIC_enabled;
+  static bool SMCLICSHV_enabled;
   
   // highest ranked interrupt currently present in CLIC
   reg_t clic_npriv;
@@ -45,6 +49,10 @@ public:
 
   bool  clic_vrtcl_or_hrzntl_int;  // clic vertical (1) or horizontal interrupt (0)
   void reset();
+  void set_smclic_enabled(bool val);
+  void set_smclicshv_enabled(bool val);
+  bool get_smclic_enabled();
+  bool get_smclicshv_enabled();
   bool load(reg_t addr, size_t len, uint8_t* bytes) override;
   bool store(reg_t addr, size_t len, const uint8_t* bytes) override;
   void take_clic_interrupt();
@@ -68,7 +76,7 @@ public:
   union clicintattr_union
   {
     struct {
-      uint8_t reserved_warl : 1;
+      uint8_t shv : 1;
       uint8_t trig : 2;
       uint8_t reserved_wpri : 3;
       uint8_t mode : 2;

@@ -402,6 +402,11 @@ void clic_t::take_clic_trap(trap_t& t, reg_t epc) {  // fixme - Implementation f
       {
         trap_handler_address = p->get_mmu()->load<uint64_t>(mtvt_val_offset,my_xlate_flags);
       }
+      if (clicintattr[clic_id].trig & (uint8_t)0x1)
+      {
+        clicintip[clic_id] = 0;
+      }
+      
     }
     else
     {

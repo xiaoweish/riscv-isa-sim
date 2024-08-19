@@ -3,6 +3,7 @@
 #include "arith.h"
 #include "dts.h"
 #include "sim.h"
+#include "mmu.h"
 
 
 // M-mode CLIC memory map - 12/19/2023 - version 0.9-draft
@@ -85,6 +86,25 @@ uint8_t                     clic_t::clicintip[CLIC_NUM_INTERRUPT]   = {0};
 uint8_t                     clic_t::clicintie[CLIC_NUM_INTERRUPT]   = {0};
 clic_t::CLICINTATTR_UNION_T clic_t::clicintattr[CLIC_NUM_INTERRUPT] = {0};
 uint8_t                     clic_t::clicintctl[CLIC_NUM_INTERRUPT]  = {0};
+
+void clic_t::set_smclic_enabled(bool val) {
+  SMCLIC_enabled = val;
+}
+void clic_t::set_suclic_enabled(bool val) {
+  SUCLIC_enabled = val;
+}
+void clic_t::set_smclicshv_enabled(bool val) {
+  SMCLICSHV_enabled = val;
+}
+bool clic_t::get_smclic_enabled() {
+  return SMCLIC_enabled;
+}
+bool clic_t::get_suclic_enabled() {
+  return SUCLIC_enabled;
+}
+bool clic_t::get_smclicshv_enabled() {
+  return SMCLICSHV_enabled;
+}
 
 bool clic_t::load(reg_t addr, size_t len, uint8_t *bytes)  {
   if (len > 8)
@@ -227,7 +247,6 @@ bool clic_t::load(reg_t addr, size_t len, uint8_t *bytes)  {
   } else {
     return false;
   }
-  return true;
 }
 
 bool clic_t::store(reg_t addr, size_t len, const uint8_t* bytes)  {
@@ -282,16 +301,22 @@ if (len > 8) {
     {
       switch (idx)
       {
-      case 0:
+      case MCLIC_INTIP_BYTE_OFFSET:
         clicintip[index] = bytes[idx]; // check
         break;
-      case 1:
+      case MCLIC_INTIE_BYTE_OFFSET:
         clicintie[index] = bytes[idx];
         break;
-      case 2:
+      case MCLIC_INTATTR_BYTE_OFFSET:
+        if (SMCLICSHV_enabled)
+        {
         clicintattr[index].all = bytes[idx];
+        } else
+        {
+          clicintattr[index].all = bytes[idx] & ~uint8_t(1);
+        }
         break;
-      case 3:
+      case MCLIC_INTCTL_BYTE_OFFSET:
         clicintctl[index] = bytes[idx];
         break;
       default:
@@ -337,7 +362,13 @@ if (len > 8) {
         clicintie[index] = bytes[idx];
         break;
       case UCLIC_INTATTR_BYTE_OFFSET:
-        clicintattr[index].all = bytes[idx];
+        if (SMCLICSHV_enabled)
+        {
+          clicintattr[index].all = bytes[idx];
+        } else
+        {
+          clicintattr[index].all = bytes[idx] & ~uint8_t(1);
+        }
         break;
       case UCLIC_INTCTL_BYTE_OFFSET:
         clicintctl[index] = bytes[idx];
@@ -481,7 +512,6 @@ void clic_t::take_clic_trap(trap_t& t, reg_t epc) {
     // fixme - code to handle exception delegation goes here
   }
 
-  // SMCLIC does not support vectored operation -- fixme when SMCLICSHV is implemented
   reg_t trap_handler_address;
   prev_priv = curr_priv;
   prev_ie   = curr_ie;
@@ -493,7 +523,30 @@ void clic_t::take_clic_trap(trap_t& t, reg_t epc) {
   switch (p->CLIC.clic_npriv)
   {
   case PRV_U:
-    trap_handler_address = (p->state.utvec->read() & ~(reg_t)63);
+    if (clicintattr[clic_id].shv)
+    {
+      xlate_flags_t my_xlate_flags = {0,0,0,0};
+      reg_t utvt_val = p->state.csrmap[CSR_UTVT]->read();
+      auto xlen = p->isa->get_max_xlen();
+      reg_t utvt_val_offset = utvt_val + xlen/8*(cause & (reg_t)0xFFF);
+      if (xlen == 32)
+      {
+        trap_handler_address = p->get_mmu()->load<uint32_t>(utvt_val_offset,my_xlate_flags);
+      }
+      else
+      {
+        trap_handler_address = p->get_mmu()->load<uint64_t>(utvt_val_offset,my_xlate_flags);
+      }
+      if (clicintattr[clic_id].trig & (uint8_t)0x1)
+      {
+        clicintip[clic_id] = 0;
+      }
+    }
+    else
+    {
+      trap_handler_address = (p->state.utvec->read() & ~(reg_t)63);
+    }
+    
     p->state.uepc->write(epc);
     xintstatus = set_field(xintstatus, MINTSTATUS_UIL, p->CLIC.clic_nlevel);
     p->state.csrmap[CSR_MINTSTATUS]->write(xintstatus);
@@ -509,7 +562,31 @@ void clic_t::take_clic_trap(trap_t& t, reg_t epc) {
     break;
 
   case PRV_M:
+    if (clicintattr[clic_id].shv)
+    {
+      xlate_flags_t my_xlate_flags = {0,0,0,0};
+      reg_t mtvt_val = p->state.csrmap[CSR_MTVT]->read();
+      auto xlen = p->isa->get_max_xlen();
+      reg_t mtvt_val_offset = mtvt_val + xlen/8*(cause & (reg_t)0xFFF);
+      if (xlen == 32)
+      {
+        trap_handler_address = p->get_mmu()->load<uint32_t>(mtvt_val_offset,my_xlate_flags);
+      }
+      else
+      {
+        trap_handler_address = p->get_mmu()->load<uint64_t>(mtvt_val_offset,my_xlate_flags);
+      }
+      if (clicintattr[clic_id].trig & (uint8_t)0x1)
+      {
+        clicintip[clic_id] = 0;
+      }
+      
+    }
+    else
+    {
     trap_handler_address = (p->state.mtvec->read() & ~(reg_t)63);
+    }
+    
     p->state.mepc->write(epc);
     xintstatus = set_field(xintstatus, MINTSTATUS_MIL, p->CLIC.clic_nlevel);
     p->state.csrmap[CSR_MINTSTATUS]->write(xintstatus);

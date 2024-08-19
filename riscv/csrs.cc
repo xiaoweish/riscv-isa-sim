@@ -406,21 +406,10 @@ reg_t cause_csr_t::read() const noexcept {
   // not generally support dynamic xlen, but this code was (partly)
   // there since at least 2015 (ea58df8 and c4350ef).
   if (proc->get_isa().get_max_xlen() > proc->get_xlen()) // Move interrupt bit to top of xlen
-    val | ((val >> (proc->get_isa().get_max_xlen()-1)) << (proc->get_xlen()-1));
+    val = val | ((val >> (proc->get_isa().get_max_xlen()-1)) << (proc->get_xlen()-1));
   
   if ((state->csrmap[CSR_MTVEC]->read() & (reg_t)0x3F) == (reg_t)0x03) {
     if (address == CSR_UCAUSE) {
-      // fixme
-      // SUCLIC : ucause
-      //  Bits    Field       Description
-      //  XLEN-1 Int errupt    Interrupt=1, Exception=0
-      //     30  (reserved for smclicshv extension)
-      //  29:28  (reserved)
-      //     27  upie         Previous interrupt enable, same as ustatus.upie
-      //  26:24  (reserved)
-      //  23:16  upil[7:0]    Previous interrupt level
-      //  15:12  (reserved)
-      //  11:0  exccode[11:0] Exception/interrupt code
       reg_t ustatus_val = state->ustatus->read();
       val = set_field(val,UCAUSE_UPIE,get_field(ustatus_val,USTATUS_UPIE));
       val = set_field(val,UCAUSE_UPIL,get_field(ustatus_val,UCAUSE_UPIL));
@@ -2021,6 +2010,7 @@ tvt_t::tvt_t(processor_t* const proc, const reg_t addr):
 
 reg_t tvt_t::read() const noexcept {
   reg_t val = basic_csr_t::read();
+  val = val & ~(reg_t)0x3F;
   return val;
 }
  
@@ -2032,7 +2022,6 @@ void tvt_t::verify_permissions(insn_t insn, bool write) const {
 }
 
 bool tvt_t::unlogged_write(const reg_t val) noexcept {
-//  return basic_csr_t::unlogged_write(val & ~(reg_t)0x3F);
   return basic_csr_t::unlogged_write(val);
 }
 
@@ -2187,17 +2176,6 @@ reg_t mcause_csr_t::read() const noexcept {
   }
   
   if ((state->csrmap[CSR_MTVEC]->read() & (reg_t)0x3F) == (reg_t)0x03) {
- // fixme  
- // SMCLIC : mcause
- // Bits    Field      Description
- // XLEN-1 Interrupt    Interrupt=1, Exception=0
- //    30  (reserved for smclicshv extension)
- // 29:28  mpp[1:0]     Previous privilege mode, same as mstatus.mpp
- //    27  mpie         Previous interrupt enable, same as mstatus.mpie
- // 26:24  (reserved)
- // 23:16  mpil[7:0]    Previous interrupt level
- // 15:12  (reserved)
- // 11:0  Exccode[11:0] Exception/interrupt code    
     reg_t mstatus_val = state->mstatus->read();
     val = set_field(val, MCAUSE_MPP, get_field(mstatus_val, MSTATUS_MPP));
     val = set_field(val, MCAUSE_MPIE, get_field(mstatus_val, MSTATUS_MPIE));

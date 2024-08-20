@@ -64,11 +64,17 @@ uint8_t                     clic_t::clicintctl[CLIC_NUM_INTERRUPT]  = {0};
 void clic_t::set_smclic_enabled(bool val) {
   SMCLIC_enabled = val;
 }
+void clic_t::set_suclic_enabled(bool val) {
+  SUCLIC_enabled = val;
+}
 void clic_t::set_smclicshv_enabled(bool val) {
   SMCLICSHV_enabled = val;
 }
 bool clic_t::get_smclic_enabled() {
   return SMCLIC_enabled;
+}
+bool clic_t::get_suclic_enabled() {
+  return SUCLIC_enabled;
 }
 bool clic_t::get_smclicshv_enabled() {
   return SMCLICSHV_enabled;
@@ -211,13 +217,13 @@ if (len > 8) {
     {
       switch (idx)
       {
-      case 0:
+      case MCLIC_INTIP_BYTE_OFFSET:
         clicintip[index] = bytes[idx]; // check
         break;
-      case 1:
+      case MCLIC_INTIE_BYTE_OFFSET:
         clicintie[index] = bytes[idx];
         break;
-      case 2:
+      case MCLIC_INTATTR_BYTE_OFFSET:
         if (SMCLICSHV_enabled)
         {
           clicintattr[index].all = bytes[idx];
@@ -226,7 +232,7 @@ if (len > 8) {
           clicintattr[index].all = bytes[idx] & ~uint8_t(1);
         }
         break;
-      case 3:
+      case MCLIC_INTCTL_BYTE_OFFSET:
         clicintctl[index] = bytes[idx];
         break;
       default:
@@ -355,7 +361,7 @@ void clic_t::take_clic_interrupt() {
 
 }
 
-void clic_t::take_clic_trap(trap_t& t, reg_t epc) {  // fixme - Implementation for SMCLIC mode only
+void clic_t::take_clic_trap(trap_t& t, reg_t epc) {
   unsigned max_xlen = p->isa->get_max_xlen();
 
   // fixme - do the preexisting "debug" and/or "state.debug_mode" mode stuff need to be copied from CLINT mode ?

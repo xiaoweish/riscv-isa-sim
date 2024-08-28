@@ -121,9 +121,8 @@ void clint_t::tick(reg_t rtc_ticks)
     hart->state.time->sync(mtime);
     if ((sim->get_harts().at(hart_id)->state.mtvec->read() & (reg_t)0x3F) == (reg_t)0x03) {
       hart->CLIC.clicintip[7] = (mtime >= mtimecmp[hart_id]) ? 1 : 0;
-    } else {
-      hart->state.mip->backdoor_write_with_mask(MIP_MTIP, mtime >= mtimecmp[hart_id] ? MIP_MTIP : 0);
     }
+    hart->state.mip->backdoor_write_with_mask(MIP_MTIP, mtime >= mtimecmp[hart_id] ? MIP_MTIP : 0);
   }
 }
 

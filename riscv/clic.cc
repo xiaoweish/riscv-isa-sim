@@ -85,7 +85,7 @@ bool clic_t::load(reg_t addr, size_t len, uint8_t *bytes)  {
     return false;
 
   tick(0);
-
+  
   if ((addr >= MCLIC_SMCLICCONFIG_EXT_OFFSET) && (addr < MCLIC_RESERVED1_BASE_OFFSET)) {
     if (len == 8) {
       // Implement double-word loads as a pair of word loads
@@ -213,9 +213,9 @@ if (len > 8) {
     /* store to clic interrupt table memory mapped registers */
     int index = ((addr & 0XFFFFFFFFFFFFFFFC) - MCLIC_INTTBL_ADDR_BASE_OFFSET) / 4;
     int byte_offset = addr & 0x3;
-    for (int idx = byte_offset; idx < len; idx++)
+    for (int idx = 0; idx < len; idx++)
     {
-      switch (idx)
+      switch (idx + byte_offset)
       {
       case MCLIC_INTIP_BYTE_OFFSET:
         clicintip[index] = bytes[idx]; // check

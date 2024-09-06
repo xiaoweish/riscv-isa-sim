@@ -1806,17 +1806,6 @@ void nxti_t::verify_permissions(insn_t insn, bool write) const {
 
   if(!proc->extension_enabled(EXT_SMCLIC))
     throw trap_illegal_instruction(insn.bits());
-  
-  // These CSRs are only designed to be used with the CSRR (CSRRS rd,csr,x0), CSRRSI/CSRRS, and CSRRCI instructions
-  // Accessing the xnxti CSR using any other CSR instruction form (CSRRW/CSRRC/CSRRWI) is reserved.
-  // Note: Use of xnxti with CSRRSI with non-zero uimm values for bits 0, 2, and 4 are reserved for future use.
-  bool csr_access_invalid = (((insn.bits() &  CSRR_FUNC3_MASK) == CSRRW_FUNC3_VAL) || // CSRRW
-                             ((insn.bits() &  CSRR_FUNC3_MASK) == CSRRC_FUNC3_VAL) || // CSRRC
-                             ((insn.bits() &  CSRR_FUNC3_MASK) == CSRRWI_FUNC3_VAL));  // CSRRWI
-
-  if (((state->csrmap[CSR_MTVEC]->read() & (reg_t)0x3F) == (reg_t)0x03) && csr_access_invalid) {
-    throw trap_illegal_instruction(insn.bits());
-  }
 
   insn_bits = insn.bits();
 }
@@ -1924,7 +1913,6 @@ void tvt_t::verify_permissions(insn_t insn, bool write) const {
   basic_csr_t::verify_permissions(insn, write);
   if (!proc->extension_enabled(EXT_SMCLIC))
     throw trap_illegal_instruction(insn.bits());
-  insn_bits = insn.bits();
 }
 
 bool tvt_t::unlogged_write(const reg_t val) noexcept {
@@ -1971,39 +1959,21 @@ bool intthresh_t::unlogged_write(const reg_t val) noexcept {
 scratchcsw_t::scratchcsw_t(processor_t* const proc, const reg_t addr):
   csr_t(proc, addr),
   val(0),
-  insn_bits(0),
   rd_val(0) {
   }
 
 void scratchcsw_t::verify_permissions(insn_t insn, bool write) const {
   csr_t::verify_permissions(insn, write);
-  insn_bits = insn.bits();
   if(!proc->extension_enabled(EXT_SMCLIC))
     throw trap_illegal_instruction(insn.bits());
-  // These CSRs are only designed to be used with the csrrw instruction with neither rd nor rs1 set to x0.
-  // Accessing the xscratchcsw register with the csrrw instruction with either rd or rs1 set to x0, or using any other CSR instruction form (CSRRWI/CSRRS/CSRRC/CSRRSI/CSRRCI), is reserved.
-  bool csrrw_valid = (((insn_bits & CSRR_OPCODE_MASK) == CSRR_OPCODE_VAL) &&
-                      ((insn_bits & CSRR_FUNC3_MASK)  == CSRRW_FUNC3_VAL) &&
-                      ((insn_bits & CSRR_RD_MASK)     != 0) &&
-                      ((insn_bits & CSRR_RS1_MASK)    != 0));
-  if (!csrrw_valid) {
-    throw trap_illegal_instruction(insn.bits());
-  }
 }
 
 reg_t scratchcsw_t::read() const noexcept {
+  rd_val = state->csrmap[CSR_MSCRATCH]->read();
   return rd_val;
 }
 bool scratchcsw_t::unlogged_write(const reg_t val) noexcept {
-  reg_t prev_val = this->val;
-  if (((state->csrmap[CSR_MSTATUS]->read() & MSTATUS_MPP) >> 11) != PRV_M)
-  {
-    rd_val = prev_val;
     this->val = val;
-  } else {
-    rd_val = val;
-  }
-  
   return true;
 }
 
@@ -2011,38 +1981,19 @@ bool scratchcsw_t::unlogged_write(const reg_t val) noexcept {
 scratchcswl_t::scratchcswl_t(processor_t* const proc, const reg_t addr):
   csr_t(proc, addr),
   val(0),
-  insn_bits(0),
   rd_val(0) {
   }
 void scratchcswl_t::verify_permissions(insn_t insn, bool write) const {
   csr_t::verify_permissions(insn, write);
-  insn_bits = insn.bits();
   if(!proc->extension_enabled(EXT_SMCLIC))
     throw trap_illegal_instruction(insn.bits());
-  bool csrrw_valid = (((insn_bits & CSRR_OPCODE_MASK) == CSRR_OPCODE_VAL) &&
-                      ((insn_bits & CSRR_FUNC3_MASK)  == CSRRW_FUNC3_VAL) &&
-                      ((insn_bits & CSRR_RD_MASK)     != 0) &&
-                      ((insn_bits & CSRR_RS1_MASK)    != 0));
-  if (!csrrw_valid) {
-    throw trap_illegal_instruction(insn.bits());
-  }
 }
 reg_t scratchcswl_t::read() const noexcept {
+  rd_val = state->csrmap[CSR_MSCRATCH]->read();
   return rd_val;
 }
 bool scratchcswl_t::unlogged_write(const reg_t val) noexcept {
-  reg_t prev_val = this->val;
-  if (address == CSR_MSCRATCHCSWL)
-  {
-    if (((state->csrmap[CSR_MCAUSE]->read()     & MCAUSE_MPIL) == 0) != 
-        ((state->csrmap[CSR_MINTSTATUS]->read() & MINTSTATUS_MIL) == 0))
-    {
-      rd_val = prev_val;
       this->val = val;
-    } else {
-      rd_val = val;
-    }
-  }
   return true;
 }
 

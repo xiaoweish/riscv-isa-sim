@@ -8,7 +8,8 @@ if (csr == CSR_MNXTI) {
   }
   if ((p->CLIC.clic_npriv == PRV_M) &&
       (p->CLIC.clic_nlevel > get_field(RS1,MCAUSE_MPIL)) &&
-      (p->CLIC.clic_nlevel > get_field(p->get_csr(CSR_MINTTHRESH,insn,false), MINTTHRESH_TH))) {
+      (p->CLIC.clic_nlevel > get_field(p->get_csr(CSR_MINTTHRESH,insn,false), MINTTHRESH_TH)) &&
+      (p->CLIC.clicintattr[p->CLIC.clic_id].shv == 0)) {
     if (((RS1 & (reg_t)0x1F) != 0) && write) {
       reg_t new_mintstatus = p->get_csr(CSR_MINTSTATUS,insn,false);
       set_field(new_mintstatus, MINTSTATUS_MIL, p->CLIC.clic_nlevel);
@@ -39,7 +40,8 @@ if (csr == CSR_MNXTI) {
   }
   if ((p->CLIC.clic_npriv == PRV_U) &&
       (p->CLIC.clic_nlevel > get_field(RS1,UCAUSE_UPIL)) &&
-      (p->CLIC.clic_nlevel > get_field(p->get_csr(CSR_UINTTHRESH,insn,false), UINTTHRESH_TH))) {
+      (p->CLIC.clic_nlevel > get_field(p->get_csr(CSR_UINTTHRESH,insn,false), UINTTHRESH_TH)) &&
+      (p->CLIC.clicintattr[p->CLIC.clic_id].shv == 0)) {
     if (((RS1 & (reg_t)0x1F) != 0) && write) {
       reg_t new_uintstatus = p->get_csr(CSR_UINTSTATUS,insn,false);
       set_field(new_uintstatus, UINTSTATUS_UIL, p->CLIC.clic_nlevel);

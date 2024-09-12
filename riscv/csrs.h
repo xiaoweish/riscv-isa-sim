@@ -938,7 +938,6 @@ class nxti_t: public csr_t {
     virtual bool unlogged_write(const reg_t val) noexcept override;
   private:
     reg_t val;
-    mutable insn_bits_t insn_bits; // value of instruction
 };
 
 class intstatus_t: public basic_csr_t {

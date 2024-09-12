@@ -1883,8 +1883,7 @@ void ssp_csr_t::verify_permissions(insn_t insn, bool write) const {
 
 nxti_t::nxti_t(processor_t* const proc, const reg_t addr):
   csr_t(proc, addr),
-  val(0),
-  insn_bits(0) {
+  val(0) {
   }
 
 void nxti_t::verify_permissions(insn_t insn, bool write) const {
@@ -1892,95 +1891,12 @@ void nxti_t::verify_permissions(insn_t insn, bool write) const {
 
   if(!proc->extension_enabled(EXT_SMCLIC))
     throw trap_illegal_instruction(insn.bits());
-
-  insn_bits = insn.bits();
 }
 reg_t nxti_t::read() const noexcept {
-  proc->CLIC.update_clic_nint();
-  if (((state->mtvec->read() & (reg_t)0x3F) == (reg_t)0x03) &&
-      (proc->CLIC.clic_npriv == PRV_M) &&
-      (proc->CLIC.clic_nlevel > get_field(state->csrmap[CSR_MCAUSE]->read(),MCAUSE_MPIL)) &&
-      (proc->CLIC.clic_nlevel > get_field(state->csrmap[CSR_MINTTHRESH]->read(),MINTTHRESH_TH))
-     )
-  {
-    return ((state->csrmap[CSR_MTVT]->read()) + (proc->get_xlen()/8) * proc->CLIC.clic_id); // rd = TBASE + XLEN/8 * clic.id
-  } else {
-    return 0;
-  }
+  return val;
 }
 bool nxti_t::unlogged_write(const reg_t val) noexcept {
-  
-  reg_t new_mstatus = state->mstatus->read();
-  reg_t new_mintstatus = state->csrmap[CSR_MINTSTATUS]->read();
-  reg_t new_mcause = state->csrmap[CSR_MCAUSE]->read();
-
-  bool csrrsi_valid = ((insn_bits & CSRR_FUNC3_MASK) != CSRRSI_FUNC3_VAL);
-  bool csrrci_valid = ((insn_bits & CSRR_FUNC3_MASK) != CSRRCI_FUNC3_VAL);
-  uint64_t uimm  = ((insn_bits & CSRR_RS1_MASK) >> 15);
-  
-  if ((state->csrmap[CSR_MTVEC]->read() & (reg_t)0x3F) == (reg_t)0x03) {
-    proc->CLIC.update_clic_nint();
-    if (csrrsi_valid || csrrci_valid) {  // set/clear immediate
-      new_mstatus |= uimm;
-      state->csrmap[CSR_MSTATUS]->write(new_mstatus); 
-      if (
-          (proc->CLIC.clic_npriv == PRV_M) &&
-          (proc->CLIC.clic_nlevel > get_field(state->csrmap[CSR_MCAUSE]->read(),MCAUSE_MPIL)) &&
-          (proc->CLIC.clic_nlevel > get_field(state->csrmap[CSR_MINTTHRESH]->read(),MINTTHRESH_TH))
-         ) {
-        if (uimm != 0) {
-          set_field(new_mintstatus,MINTSTATUS_MIL,proc->CLIC.clic_nlevel);
-          state->csrmap[CSR_MINTSTATUS]->write(new_mintstatus);
-          set_field(new_mcause,MCAUSE_EXCCODE,proc->CLIC.clic_id);
-          if (proc->get_xlen() > 32)
-          {
-            set_field(new_mcause,MCAUSE64_INT,1);
-          } else {
-            set_field(new_mcause,MCAUSE_INT,1);
-          }
-          state->csrmap[CSR_MCAUSE]->write(new_mcause);
-          if ((proc->CLIC.clicintattr[proc->CLIC.clic_id].trig & 1) == 1)
-          {
-            proc->CLIC.clicintip[proc->CLIC.clic_id] = 0;
-          }
-          
-        }
-      }
-      this->val = ((state->csrmap[CSR_MTVT]->read()) + (proc->get_xlen()/8) * proc->CLIC.clic_id); // rd = TBASE + XLEN/8 * clic.id
-      return true;
-    } else { // csrrs (i.e. not immediate)
-      if ((insn_bits & CSRR_RS1_MASK) != 0) {
-        new_mstatus |= (val & 0x1F);
-        state->csrmap[CSR_MSTATUS]->write(new_mstatus);
-      }
-      if (
-          (proc->CLIC.clic_npriv == PRV_M) &&
-          (proc->CLIC.clic_nlevel > get_field(val,MCAUSE_MPIL)) &&
-          (proc->CLIC.clic_nlevel > get_field(state->csrmap[CSR_MINTTHRESH]->read(),MINTTHRESH_TH))
-         ) {
-        if (((val & 0x1F) != 0) && ((insn_bits & CSRR_RS1_MASK) != 0)){
-          set_field(new_mintstatus,MINTSTATUS_MIL,proc->CLIC.clic_nlevel);
-          state->csrmap[CSR_MINTSTATUS]->write(new_mintstatus);
-          set_field(new_mcause,MCAUSE_EXCCODE,proc->CLIC.clic_id);
-          if (proc->get_xlen() > 32)
-          {
-            set_field(new_mcause,MCAUSE64_INT,1);
-          } else {
-            set_field(new_mcause,MCAUSE_INT,1);
-          }
-          state->csrmap[CSR_MCAUSE]->write(new_mcause);
-          if ((proc->CLIC.clicintattr[proc->CLIC.clic_id].trig & 1) == 1)
-          {
-            proc->CLIC.clicintip[proc->CLIC.clic_id] = 0;
-          }
-          
-        }
-      }
-      this->val = ((state->csrmap[CSR_MTVT]->read()) + (proc->get_xlen()/8) * proc->CLIC.clic_id); // rd = TBASE + XLEN/8 * clic.id
-      return true;
-    }
-  }
-  this->val = 0;
+  this->val = val;
   return true;
 }
 

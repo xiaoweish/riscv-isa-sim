@@ -82,7 +82,7 @@ bool clint_t::store(reg_t addr, size_t len, const uint8_t* bytes)
       if (sim->get_harts().count(hart_id)) {
         if ((sim->get_harts().at(hart_id)->state.mtvec->read() & (reg_t)0x3F) == (reg_t)0x03)
         {
-          sim->get_harts().at(hart_id)->CLIC.clicintip[3] = 1;
+          sim->get_harts().at(hart_id)->CLIC.clicintip[3] = msip & 1 ? 1 : 0;
         } else {
           sim->get_harts().at(hart_id)->state.mip->backdoor_write_with_mask(MIP_MSIP, msip & 1 ? MIP_MSIP : 0);
         }

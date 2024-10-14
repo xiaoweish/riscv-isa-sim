@@ -12,14 +12,14 @@ if (csr == CSR_MNXTI) {
       (p->CLIC.clicintattr[p->CLIC.clic_id].shv == 0)) {
     if (write) {
       reg_t new_mintstatus = p->get_csr(CSR_MINTSTATUS, insn, false);
-      set_field(new_mintstatus, MINTSTATUS_MIL, p->CLIC.clic_nlevel);
+      new_mintstatus = set_field(new_mintstatus, MINTSTATUS_MIL, p->CLIC.clic_nlevel);
       p->put_csr(CSR_MINTSTATUS, new_mintstatus);
       reg_t new_mcause = p->get_csr(CSR_MCAUSE, insn, false);
-      set_field(new_mcause, MCAUSE_EXCCODE, p->CLIC.clic_id);
+      new_mcause = set_field(new_mcause, MCAUSE_EXCCODE, p->CLIC.clic_id);
       if (p->get_xlen() > 32) {
-        set_field(new_mcause,MCAUSE64_INT,1);
+        new_mcause = set_field(new_mcause,MCAUSE64_INT,1);
       } else {
-        set_field(new_mcause,MCAUSE_INT,1);
+        new_mcause = set_field(new_mcause,MCAUSE_INT,1);
       }
       p->put_csr(CSR_MCAUSE, new_mcause);
       if ((p->CLIC.clicintattr[p->CLIC.clic_id].trig & 1) == 1) {
@@ -44,14 +44,14 @@ if (csr == CSR_MNXTI) {
       (p->CLIC.clicintattr[p->CLIC.clic_id].shv == 0)) {
     if (write) {
       reg_t new_uintstatus = p->get_csr(CSR_UINTSTATUS, insn, false);
-      set_field(new_uintstatus, UINTSTATUS_UIL, p->CLIC.clic_nlevel);
+      new_uintstatus = set_field(new_uintstatus, UINTSTATUS_UIL, p->CLIC.clic_nlevel);
       p->put_csr(CSR_UINTSTATUS, new_uintstatus);
       reg_t new_ucause = p->get_csr(CSR_UCAUSE, insn, false);
-      set_field(new_ucause, UCAUSE_EXCCODE, p->CLIC.clic_id);
+      new_ucause = set_field(new_ucause, UCAUSE_EXCCODE, p->CLIC.clic_id);
       if (p->get_xlen() > 32) {
-        set_field(new_ucause,UCAUSE64_INT,1);
+        new_ucause = set_field(new_ucause,UCAUSE64_INT,1);
       } else {
-        set_field(new_ucause,UCAUSE_INT,1);
+        new_ucause = set_field(new_ucause,UCAUSE_INT,1);
       }
       p->put_csr(CSR_UCAUSE, new_ucause);
       if ((p->CLIC.clicintattr[p->CLIC.clic_id].trig & 1) == 1) {

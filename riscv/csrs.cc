@@ -407,6 +407,13 @@ reg_t cause_csr_t::read() const noexcept {
   // there since at least 2015 (ea58df8 and c4350ef).
   if (proc->get_isa().get_max_xlen() > proc->get_xlen()) // Move interrupt bit to top of xlen
     return val | ((val >> (proc->get_isa().get_max_xlen()-1)) << (proc->get_xlen()-1));
+  if ((state->csrmap[CSR_MTVEC]->read() & (reg_t)0x3F) == (reg_t)0x03) {
+    if (address == CSR_UCAUSE) {
+      reg_t ustatus_val = state->csrmap[CSR_USTATUS]->read();
+      val = set_field(val,UCAUSE_UPIE,get_field(ustatus_val,USTATUS_UPIE));
+    }
+  }
+
   return val;
 }
 

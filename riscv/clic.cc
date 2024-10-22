@@ -517,7 +517,6 @@ void clic_t::take_clic_trap(trap_t& t, reg_t epc) {
   prev_ie   = curr_ie;
   prev_level = curr_level;
   reg_t cause = t.cause();
-  cause = set_field(cause,MCAUSE_MPIL, prev_level);
   reg_t  xintstatus = p->state.csrmap[CSR_MINTSTATUS]->read();
   reg_t s;  
   switch (p->CLIC.clic_npriv)
@@ -528,6 +527,7 @@ void clic_t::take_clic_trap(trap_t& t, reg_t epc) {
       xlate_flags_t my_xlate_flags = {0,0,0,0};
       reg_t utvt_val = p->state.csrmap[CSR_UTVT]->read();
       auto xlen = p->isa->get_max_xlen();
+      cause = set_field(cause,UCAUSE_UPIL, prev_level);
       reg_t utvt_val_offset = utvt_val + xlen/8*(cause & (reg_t)0xFFF);
       if (xlen == 32)
       {
@@ -567,6 +567,7 @@ void clic_t::take_clic_trap(trap_t& t, reg_t epc) {
       xlate_flags_t my_xlate_flags = {0,0,0,0};
       reg_t mtvt_val = p->state.csrmap[CSR_MTVT]->read();
       auto xlen = p->isa->get_max_xlen();
+      cause = set_field(cause,MCAUSE_MPIL, prev_level);
       reg_t mtvt_val_offset = mtvt_val + xlen/8*(cause & (reg_t)0xFFF);
       if (xlen == 32)
       {
@@ -650,9 +651,13 @@ void clic_t::reset() {
   mintstatus = mintstatus & ~MINTSTATUS_MIL;
   mintstatus = mintstatus & ~MINTSTATUS_UIL;
   csrmap[CSR_MINTSTATUS]->write(mintstatus);
+
   reg_t mcause = csrmap[CSR_MCAUSE]->read();
   mcause = mcause & ~MCAUSE_MPIL;
   csrmap[CSR_MCAUSE]->write(mcause);
+  reg_t ucause = csrmap[CSR_UCAUSE]->read();
+  ucause = ucause & ~UCAUSE_UPIL;
+  csrmap[CSR_UCAUSE]->write(ucause);
 
   curr_priv = PRV_U;
   prev_priv = PRV_U;

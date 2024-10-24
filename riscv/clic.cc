@@ -184,6 +184,8 @@ bool clic_t::load(reg_t addr, size_t len, uint8_t *bytes)  {
       }
     }
     return true;
+  } else if ((addr >= MCLIC_INTTBL_ADDR_TOP_OFFSET + 4) && (addr + len <= MCLIC_SIZE)) {
+    return true;
   } else if ((addr >= UCLIC_SMCLICCONFIG_EXT_OFFSET) && (addr < UCLIC_RESERVED_BASE_OFFSET)) {
     if (len == 8) {
       // Implement double-word loads as a pair of word loads
@@ -227,22 +229,24 @@ bool clic_t::load(reg_t addr, size_t len, uint8_t *bytes)  {
       switch (i)
       {
       case UCLIC_INTIP_BYTE_OFFSET:
-        bytes[i] = clicintip[index];
+        bytes[i] = (clicintattr[index].mode <= (uint8_t)PRV_U) ? clicintip[index] : (uint8_t)0;
         break;
       case UCLIC_INTIE_BYTE_OFFSET:
-        bytes[i] = clicintie[index];
+        bytes[i] = (clicintattr[index].mode <= (uint8_t)PRV_U) ? clicintie[index] : (uint8_t)0;
         break;
       case UCLIC_INTATTR_BYTE_OFFSET:
-        bytes[i] = clicintattr[index].all;
+        bytes[i] = (clicintattr[index].mode <= (uint8_t)PRV_U) ? clicintattr[index].all : (uint8_t)0;
         break;
       case UCLIC_INTCTL_BYTE_OFFSET:
-        bytes[i] = clicintctl[index];
+        bytes[i] = (clicintattr[index].mode <= (uint8_t)PRV_U) ? clicintctl[index] : (uint8_t)0;
         break;
       default:
         return false;
         break;
       }
     }
+    return true;
+  } else if ((addr >= UCLIC_INTTBL_ADDR_TOP_OFFSET + 4) && (addr + len <= UCLIC_SIZE)) {
     return true;
   } else {
     return false;
@@ -324,6 +328,8 @@ if (len > 8) {
       }
     }
     return true;
+  } else if ((addr >= (MCLIC_INTTBL_ADDR_TOP_OFFSET + 4) ) && (addr + len <= MCLIC_SIZE)) {
+    return true;
   } else if ((addr >= UCLIC_SMCLICCONFIG_EXT_OFFSET) && (addr < UCLIC_RESERVED_BASE_OFFSET)) {
     if (len == 8) {
       // Implement double-word stores as a pair of word stores
@@ -356,12 +362,17 @@ if (len > 8) {
       switch (idx)
       {
       case UCLIC_INTIP_BYTE_OFFSET:
-        clicintip[index] = bytes[idx]; // check
+        if (clicintattr[index].mode <= (uint8_t)PRV_U) {
+          clicintip[index] = bytes[idx];
+        }
         break;
       case UCLIC_INTIE_BYTE_OFFSET:
+        if (clicintattr[index].mode <= (uint8_t)PRV_U) {
         clicintie[index] = bytes[idx];
+        }
         break;
       case UCLIC_INTATTR_BYTE_OFFSET:
+        if (clicintattr[index].mode <= (uint8_t)PRV_U) {
         if (SMCLICSHV_enabled)
         {
           clicintattr[index].all = bytes[idx];
@@ -369,15 +380,19 @@ if (len > 8) {
         {
           clicintattr[index].all = bytes[idx] & ~uint8_t(1);
         }
+        }
         break;
       case UCLIC_INTCTL_BYTE_OFFSET:
+        if (clicintattr[index].mode <= (uint8_t)PRV_U) {
         clicintctl[index] = bytes[idx];
+        }
         break;
       default:
         break;
       }
     }
     return true;
+  } else if ((addr >= UCLIC_INTTBL_ADDR_TOP_OFFSET + 4) && (addr + len <= UCLIC_SIZE)) {
   } else {
     return false;
   }

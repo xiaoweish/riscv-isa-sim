@@ -406,7 +406,15 @@ reg_t cause_csr_t::read() const noexcept {
   // not generally support dynamic xlen, but this code was (partly)
   // there since at least 2015 (ea58df8 and c4350ef).
   if (proc->get_isa().get_max_xlen() > proc->get_xlen()) // Move interrupt bit to top of xlen
-    return val | ((val >> (proc->get_isa().get_max_xlen()-1)) << (proc->get_xlen()-1));
+    val | ((val >> (proc->get_isa().get_max_xlen()-1)) << (proc->get_xlen()-1));
+  if ((state->csrmap[CSR_MTVEC]->read() & (reg_t)0x3F) == (reg_t)0x03) {
+    if (address == CSR_SCAUSE) {
+      reg_t sstatus_val = state->csrmap[CSR_SSTATUS]->read();
+      val = set_field(val,SCAUSE_SPP,get_field(sstatus_val,SSTATUS_SPP));
+      val = set_field(val,SCAUSE_SPIE,get_field(sstatus_val,SSTATUS_SPIE));
+    }
+  }
+
   return val;
 }
 
@@ -760,6 +768,10 @@ reg_t mip_csr_t::read() const noexcept {
     if (address == CSR_MIP)
     {
     return 0;
+    } else if ((address == CSR_SIP) && (proc->CLIC.SSCLIC_enabled)) {
+      return 0;
+    } else {
+      return val | state->hvip->basic_csr_t::read();
     }
   } else {
     return val | state->hvip->basic_csr_t::read();
@@ -861,7 +873,20 @@ mie_proxy_csr_t::mie_proxy_csr_t(processor_t* const proc, const reg_t addr, gene
 }
 
 reg_t mie_proxy_csr_t::read() const noexcept {
+  if ((state->csrmap[CSR_MTVEC]->read() & (reg_t)0x3F) == (reg_t)0x03) {
+    if(proc->CLIC.SSCLIC_enabled) {
+      if (address == CSR_SIE)
+      {
+        return 0;
+      } else {
   return accr->ie_read();
+}
+    } else {
+      return accr->ie_read();
+    }
+  } else {
+    return accr->ie_read();
+  }
 }
 
 bool mie_proxy_csr_t::unlogged_write(const reg_t val) noexcept {
@@ -1827,7 +1852,7 @@ reg_t tvt_t::read() const noexcept {
  
 void tvt_t::verify_permissions(insn_t insn, bool write) const {
   basic_csr_t::verify_permissions(insn, write);
-  if (!proc->extension_enabled(EXT_SMCLIC))
+  if (!proc->extension_enabled(EXT_SMCLIC) && !proc->extension_enabled(EXT_SSCLIC))
     throw trap_illegal_instruction(insn.bits());
 }
 
@@ -1842,12 +1867,17 @@ intstatus_t::intstatus_t(processor_t* const proc, const reg_t addr):
 
 reg_t intstatus_t::read() const noexcept {
   reg_t val = basic_csr_t::read();
+  if (address == CSR_SINTSTATUS)
+  {
+    reg_t mask = ((reg_t)MINTSTATUS_SIL | (proc->CLIC.SUCLIC_enabled ? (reg_t)MINTSTATUS_UIL : (reg_t)0));
+    val = val & mask;
+  }
   return val;
 }
 
 void intstatus_t::verify_permissions(insn_t insn, bool write) const {
   basic_csr_t::verify_permissions(insn, write);
-  if (!proc->extension_enabled(EXT_SMCLIC))
+  if (!proc->extension_enabled(EXT_SMCLIC) && !proc->extension_enabled(EXT_SSCLIC))
     throw trap_illegal_instruction(insn.bits());
 }
 

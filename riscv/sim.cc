@@ -38,6 +38,7 @@ extern device_factory_t* ns16550_factory;
 extern device_factory_t* clic_factory;
 
 bool clic_t::SMCLIC_enabled = false;
+bool clic_t::SSCLIC_enabled = false;
 bool clic_t::SUCLIC_enabled = false;
 bool clic_t::SMCLICSHV_enabled = false;
 

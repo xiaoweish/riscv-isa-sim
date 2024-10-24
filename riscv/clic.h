@@ -39,6 +39,7 @@ public:
   reg_t prev_level; // previous interrupt level  L = max(xintstatus.xil, xintthresh.th)
 
   static bool SMCLIC_enabled;
+  static bool SSCLIC_enabled;
   static bool SUCLIC_enabled;
   static bool SMCLICSHV_enabled;
   
@@ -50,9 +51,11 @@ public:
   bool  clic_vrtcl_or_hrzntl_int;  // clic vertical (1) or horizontal interrupt (0)
   void reset();
   void set_smclic_enabled(bool val);
+  void set_ssclic_enabled(bool val);
   void set_suclic_enabled(bool val);
   void set_smclicshv_enabled(bool val);
   bool get_smclic_enabled();
+  bool get_ssclic_enabled();
   bool get_suclic_enabled();
   bool get_smclicshv_enabled();
   bool load(reg_t addr, size_t len, uint8_t* bytes) override;

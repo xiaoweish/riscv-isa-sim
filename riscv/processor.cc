@@ -46,6 +46,15 @@ processor_t::processor_t(const isa_parser_t *isa, const cfg_t *cfg,
     CLIC.p = this;
     CLIC.sim = sim;
     CLIC.set_smclic_enabled(true);
+    if (extension_enabled(EXT_SSCLIC))
+    {
+      CLIC.set_ssclic_enabled(true);
+    }
+    else
+    {
+      CLIC.set_ssclic_enabled(false);
+    }
+    
     if (extension_enabled(EXT_SMCLICSHV))
     {
       CLIC.set_smclicshv_enabled(true);
@@ -55,6 +64,7 @@ processor_t::processor_t(const isa_parser_t *isa, const cfg_t *cfg,
   } else {
       CLIC.set_smclic_enabled(false);
       CLIC.set_smclicshv_enabled(false);
+      CLIC.set_ssclic_enabled(false);
   }
 
 #ifndef HAVE_INT128

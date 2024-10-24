@@ -655,9 +655,6 @@ void clic_t::reset() {
   reg_t mcause = csrmap[CSR_MCAUSE]->read();
   mcause = mcause & ~MCAUSE_MPIL;
   csrmap[CSR_MCAUSE]->write(mcause);
-  reg_t ucause = csrmap[CSR_UCAUSE]->read();
-  ucause = ucause & ~UCAUSE_UPIL;
-  csrmap[CSR_UCAUSE]->write(ucause);
 
   curr_priv = PRV_U;
   prev_priv = PRV_U;

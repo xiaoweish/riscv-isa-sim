@@ -6,8 +6,14 @@ if (STATE.v) {
 } else {
   require_privilege(get_field(STATE.mstatus->read(), MSTATUS_TSR) ? PRV_M : PRV_S);
 }
-reg_t next_pc = p->get_state()->sepc->read();
-set_pc_and_serialize(next_pc);
+if (p->extension_enabled(EXT_SMCLICSHV) && (STATE.scause->read() & SCAUSE_INHV)) {
+  xlate_flags_t my_xlate_flags = {0,0,0,0};
+  reg_t new_sepc = p->get_mmu()->load<uint32_t>(p->get_state()->sepc->read(),my_xlate_flags);
+  set_pc_and_serialize(new_sepc);
+} else {
+  reg_t next_pc = p->get_state()->sepc->read();
+  set_pc_and_serialize(next_pc);
+}
 reg_t s = STATE.sstatus->read();
 reg_t prev_prv = get_field(s, MSTATUS_SPP);
 s = set_field(s, MSTATUS_SIE, get_field(s, MSTATUS_SPIE));

@@ -314,6 +314,8 @@ isa_parser_t::isa_parser_t(const char* str, const char *priv)
       extension_table[EXT_SMCLIC] = true;
     } else if (ext_str == "smclicshv") {
       extension_table[EXT_SMCLICSHV] = true;
+    } else if (ext_str == "ssclic") {
+      extension_table[EXT_SSCLIC] = true;
     } else if (ext_str == "zicfilp") {
       extension_table[EXT_ZICFILP] = true;
     } else if (ext_str == "zicfiss") {

@@ -377,17 +377,29 @@ tvec_csr_t::tvec_csr_t(processor_t* const proc, const reg_t addr):
 }
 
 reg_t tvec_csr_t::read() const noexcept {
-  return val;
+  reg_t read_val = val;
+  if (proc->CLIC.SMCLIC_active) {
+      if (address == CSR_STVEC) {
+        read_val = read_val & ~(reg_t)60; // bits 5:2 to be zero only
+        read_val = read_val | (reg_t)3; // mode bits set to CLIC
+      }
+  }
+  return read_val;
 }
 
 bool tvec_csr_t::unlogged_write(const reg_t val) noexcept {
   if (proc->extension_enabled(EXT_SMCLIC)) {
+    if (address == CSR_MTVEC) {
       if ((val & (reg_t)0x3F) == 0x03) {
-        // CLIC mode is being enabled
         this->val = val & ~(reg_t)60; // mask out bits 5:2 to be zero only
+        proc->CLIC.SMCLIC_active = true;
       } else {
         this->val = val & ~(reg_t)2;
+        proc->CLIC.SMCLIC_active = false;
       }
+    } else {
+      this->val = val & ~(reg_t)2;
+    }
   } else {
     this->val = val & ~(reg_t)2;
   }

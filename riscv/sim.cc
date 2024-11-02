@@ -41,6 +41,7 @@ bool clic_t::SMCLIC_enabled = false;
 bool clic_t::SSCLIC_enabled = false;
 bool clic_t::SUCLIC_enabled = false;
 bool clic_t::SMCLICSHV_enabled = false;
+bool clic_t::SMCLIC_active = false;
 
 sim_t::sim_t(const cfg_t *cfg, bool halted,
              std::vector<std::pair<reg_t, abstract_mem_t*>> mems,

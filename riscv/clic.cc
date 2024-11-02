@@ -4,6 +4,7 @@
 #include "dts.h"
 #include "sim.h"
 #include "mmu.h"
+#include "debug_defines.h"
 
 
 // M-mode CLIC memory map - 12/19/2023 - version 0.9-draft
@@ -516,142 +517,237 @@ void clic_t::take_clic_interrupt() {
 void clic_t::take_clic_trap(trap_t& t, reg_t epc) {
   unsigned max_xlen = p->isa->get_max_xlen();
 
-  // fixme - do the preexisting "debug" and/or "state.debug_mode" mode stuff need to be copied from CLINT mode ?
+  if (p->debug) {
+    std::stringstream s; // first put everything in a string, later send it to output
+    s << "core " << std::dec << std::setfill(' ') << std::setw(3) << p->id
+      << ": exception " << t.name() << ", epc 0x"
+      << std::hex << std::setfill('0') << std::setw(max_xlen/4) << zext(epc, max_xlen) << std::endl;
+    if (t.has_tval())
+       s << "core " << std::dec << std::setfill(' ') << std::setw(3) << p->id
+         << ":           tval 0x" << std::hex << std::setfill('0') << std::setw(max_xlen / 4)
+         << zext(t.get_tval(), max_xlen) << std::endl;
+    p->debug_output_log(&s);
+  }
 
+  if (p->state.debug_mode) {
+    if (t.cause() == CAUSE_BREAKPOINT) {
+      p->state.pc = DEBUG_ROM_ENTRY;
+    } else {
+      p->state.pc = DEBUG_ROM_TVEC;
+    }
+    return;
+  }
+
+  reg_t vsdeleg, hsdeleg;
   reg_t bit = t.cause();
   bool curr_virt = p->state.v;
-    const reg_t interrupt_bit = (reg_t)1 << (max_xlen - 1);
+  const reg_t interrupt_bit = (reg_t)1 << (max_xlen - 1);
   bool interrupt = (bit & interrupt_bit) != 0;
+  reg_t trap_handler_address;
+  reg_t sstatus_spie = 0;
+  reg_t mstatus_mpie = 0;
 
   if (interrupt) {
     bit &= ~((reg_t)1 << (max_xlen - 1));
-  } else {
-    // fixme - code to handle exception delegation goes here
-  }
+    prev_priv = curr_priv;
+    prev_level = curr_level;
+    reg_t cause = t.cause();
+    reg_t  xintstatus = p->state.csrmap[CSR_MINTSTATUS]->read();
+    reg_t s;  
+    switch (p->CLIC.clic_npriv)
+    {
+      case PRV_U:
+        break;
 
-  reg_t trap_handler_address;
-  prev_priv = curr_priv;
-  prev_ie   = curr_ie;
-  prev_level = curr_level;
-  reg_t cause = t.cause();
-  reg_t  xintstatus = p->state.csrmap[CSR_MINTSTATUS]->read();
-  reg_t s;  
-  switch (p->CLIC.clic_npriv)
-  {
-    case PRV_U:
-      break;
-
-    case PRV_S:
-      if (clicintattr[clic_id].shv)
-      {
-        xlate_flags_t my_xlate_flags = {0,0,0,0};
-        reg_t stvt_val = p->state.csrmap[CSR_STVT]->read();
-        auto xlen = p->isa->get_max_xlen();
+      case PRV_S:
         cause = set_field(cause,SCAUSE_SPIL, prev_level);
-        reg_t stvt_val_offset = stvt_val + xlen/8*(cause & (reg_t)0xFFF);
-        if (xlen == 32)
+        sstatus_spie = (p->state.sstatus->read() & SSTATUS_SIE) ? 1 : 0;
+        if (clicintattr[clic_id].shv)
         {
-          trap_handler_address = p->get_mmu()->load<uint32_t>(stvt_val_offset,my_xlate_flags);
+          xlate_flags_t my_xlate_flags = {0,0,0,0};
+          reg_t stvt_val = p->state.csrmap[CSR_STVT]->read();
+          auto xlen = p->isa->get_max_xlen();
+          reg_t stvt_val_offset = stvt_val + xlen/8*(cause & (reg_t)0xFFF);
+          if (xlen == 32)
+          {
+            trap_handler_address = p->get_mmu()->load<uint32_t>(stvt_val_offset,my_xlate_flags);
+          }
+          else
+          {
+            trap_handler_address = p->get_mmu()->load<uint64_t>(stvt_val_offset,my_xlate_flags);
+          }
+          if (clicintattr[clic_id].trig & (uint8_t)0x1)
+          {
+            clicintip[clic_id] = 0;
+          }
+
         }
         else
         {
-          trap_handler_address = p->get_mmu()->load<uint64_t>(stvt_val_offset,my_xlate_flags);
-        }
-        if (clicintattr[clic_id].trig & (uint8_t)0x1)
-        {
-          clicintip[clic_id] = 0;
+          trap_handler_address = (p->state.stvec->read() & ~(reg_t)63);
         }
 
-      }
-      else
-      {
-        trap_handler_address = (p->state.stvec->read() & ~(reg_t)63);
-      }
+        p->state.sepc->write(epc);
+        xintstatus = set_field(xintstatus, MINTSTATUS_SIL, p->CLIC.clic_nlevel);
+        p->state.csrmap[CSR_MINTSTATUS]->write(xintstatus);
+        p->state.csrmap[CSR_SINTSTATUS]->write(xintstatus);
+        p->state.scause->write(cause);
+        p->state.stval->write(t.get_tval());
+        s = p->state.sstatus->read();
+        s = set_field(s, SSTATUS_SPIE, sstatus_spie);
+        s = set_field(s, SSTATUS_SPP, prev_priv);
+        s = set_field(s, MSTATUS_SIE, 0);
+        p->state.sstatus->write(s);
+        break;
 
-      p->state.sepc->write(epc);
-      xintstatus = set_field(xintstatus, MINTSTATUS_SIL, p->CLIC.clic_nlevel);
-      p->state.csrmap[CSR_MINTSTATUS]->write(xintstatus);
-      p->state.scause->write(cause);
-      p->state.stval->write(t.get_tval());
-      s = p->state.sstatus->read();
-      s = set_field(s, SSTATUS_SPIE, prev_ie);
-      s = set_field(s, SSTATUS_SPP, prev_priv);
-      s = set_field(s, MSTATUS_SIE, 0);
-      p->state.sstatus->write(s);
-      break;
-
-    case PRV_M:
-      if (clicintattr[clic_id].shv)
-      {
-        xlate_flags_t my_xlate_flags = {0,0,0,0};
-        reg_t mtvt_val = p->state.csrmap[CSR_MTVT]->read();
-        auto xlen = p->isa->get_max_xlen();
+      case PRV_M:
         cause = set_field(cause,MCAUSE_MPIL, prev_level);
-        reg_t mtvt_val_offset = mtvt_val + xlen/8*(cause & (reg_t)0xFFF);
-        if (xlen == 32)
+        mstatus_mpie = (p->state.mstatus->read() & MSTATUS_MIE) ? 1 : 0;
+        if (clicintattr[clic_id].shv)
         {
-          trap_handler_address = p->get_mmu()->load<uint32_t>(mtvt_val_offset,my_xlate_flags);
+          xlate_flags_t my_xlate_flags = {0,0,0,0};
+          reg_t mtvt_val = p->state.csrmap[CSR_MTVT]->read();
+          auto xlen = p->isa->get_max_xlen();
+          reg_t mtvt_val_offset = mtvt_val + xlen/8*(cause & (reg_t)0xFFF);
+          if (xlen == 32)
+          {
+            trap_handler_address = p->get_mmu()->load<uint32_t>(mtvt_val_offset,my_xlate_flags);
+          }
+          else
+          {
+            trap_handler_address = p->get_mmu()->load<uint64_t>(mtvt_val_offset,my_xlate_flags);
+          }
+          if (clicintattr[clic_id].trig & (uint8_t)0x1)
+          {
+            clicintip[clic_id] = 0;
+          }
+
         }
         else
         {
-          trap_handler_address = p->get_mmu()->load<uint64_t>(mtvt_val_offset,my_xlate_flags);
-        }
-        if (clicintattr[clic_id].trig & (uint8_t)0x1)
-        {
-          clicintip[clic_id] = 0;
+          trap_handler_address = (p->state.mtvec->read() & ~(reg_t)63);
         }
 
-      }
-      else
-      {
-        trap_handler_address = (p->state.mtvec->read() & ~(reg_t)63);
-      }
+        p->state.mepc->write(epc);
+        xintstatus = set_field(xintstatus, MINTSTATUS_MIL, p->CLIC.clic_nlevel);
+        p->state.csrmap[CSR_MINTSTATUS]->write(xintstatus);
+        p->state.mcause->write(cause);
+        p->state.mtval->write(t.get_tval());
+        p->state.mtval2->write(t.get_tval2());
+        p->state.mtinst->write(t.get_tinst());
+        s = p->state.mstatus->read();
+        s = set_field(s, MSTATUS_MPIE, mstatus_mpie);
+        s = set_field(s, MSTATUS_MPP, prev_priv);
+        s = set_field(s, MSTATUS_MIE, 0);
+        s = set_field(s, MSTATUS_MPV, curr_virt);
+        s = set_field(s, MSTATUS_GVA, t.has_gva());
+        s = set_field(s, MSTATUS_MPELP, p->state.elp);
+        p->state.mstatus->write(s);
+        if (p->state.mstatush) p->state.mstatush->write(s >> 32);  // log mstatush change
+        break;
 
+      default:
+        break;
+    } 
+  
+    const reg_t rnmi_trap_handler_address = 0;
+    const bool nmie = !(p->state.mnstatus && !get_field(p->state.mnstatus->read(), MNSTATUS_NMIE));
+    
+    p->state.pc = !nmie ? rnmi_trap_handler_address : trap_handler_address;
+    
+    p->state.elp = elp_t::NO_LP_EXPECTED;
+
+    switch (p->CLIC.clic_npriv)
+    {
+    case PRV_U:
+      p->set_privilege(PRV_U, false);
+      break;
+    case PRV_S:
+      p->set_privilege(PRV_S, false);
+      break;
+    case PRV_M:
+    p->set_privilege(PRV_M, false);
+      break;
+    
+    default:
+      break;
+    }
+  } else { // not interrupt //
+    vsdeleg = (curr_virt && p->state.prv <= PRV_S) ? (p->state.medeleg->read() & p->state.hedeleg->read()) : 0;
+    hsdeleg = (p->state.prv <= PRV_S) ? p->state.medeleg->read() : 0;
+    if (p->state.prv <= PRV_S && bit < max_xlen && ((vsdeleg >> bit) & 1)) {
+      // Handle the trap in VS-mode
+      const reg_t adjusted_cause = interrupt ? bit - 1 : bit;  // VSSIP -> SSIP, etc
+      reg_t vector = (p->state.vstvec->read() & 1) && interrupt ? 4 * adjusted_cause : 0;
+      p->state.pc = (p->state.vstvec->read() & ~(reg_t)1) + vector;
+      p->state.vscause->write(adjusted_cause | (interrupt ? interrupt_bit : 0));
+      p->state.vsepc->write(epc);
+      p->state.vstval->write(t.get_tval());
+
+      reg_t s = p->state.sstatus->read();
+      s = set_field(s, MSTATUS_SPIE, get_field(s, MSTATUS_SIE));
+      s = set_field(s, MSTATUS_SPP, p->state.prv);
+      s = set_field(s, MSTATUS_SIE, 0);
+      s = set_field(s, MSTATUS_SPELP, p->state.elp);
+      p->state.elp = elp_t::NO_LP_EXPECTED;
+      p->state.sstatus->write(s);
+      p->set_privilege(PRV_S, true);
+    } else if (p->state.prv <= PRV_S && bit < max_xlen && ((hsdeleg >> bit) & 1)) {
+      // Handle the trap in HS-mode
+      reg_t vector = (p->state.nonvirtual_stvec->read() & 1) && interrupt ? 4 * bit : 0;
+      p->state.pc = (p->state.nonvirtual_stvec->read() & ~(reg_t)1) + vector;
+      p->state.nonvirtual_scause->write(t.cause());
+      p->state.nonvirtual_sepc->write(epc);
+      p->state.nonvirtual_stval->write(t.get_tval());
+      p->state.htval->write(t.get_tval2());
+      p->state.htinst->write(t.get_tinst());
+
+      reg_t s = p->state.nonvirtual_sstatus->read();
+      s = set_field(s, MSTATUS_SPIE, get_field(s, MSTATUS_SIE));
+      s = set_field(s, MSTATUS_SPP, p->state.prv);
+      s = set_field(s, MSTATUS_SIE, 0);
+      s = set_field(s, MSTATUS_SPELP, p->state.elp);
+      p->state.elp = elp_t::NO_LP_EXPECTED;
+      p->state.nonvirtual_sstatus->write(s);
+      if (p->extension_enabled('H')) {
+        s = p->state.hstatus->read();
+        if (curr_virt)
+          s = set_field(s, HSTATUS_SPVP, p->state.prv);
+        s = set_field(s, HSTATUS_SPV, curr_virt);
+        s = set_field(s, HSTATUS_GVA, t.has_gva());
+        p->state.hstatus->write(s);
+      }
+      p->set_privilege(PRV_S, false);
+    } else {
+      // Handle the trap in M-mode
+      const reg_t vector = (p->state.mtvec->read() & 1) && interrupt ? 4 * bit : 0;
+      const reg_t trap_handler_address = (p->state.mtvec->read() & ~(reg_t)63) + vector;
+      // RNMI exception vector is implementation-defined.  Since we don't model
+      // RNMI sources, the feature isn't very useful, so pick an invalid address.
+      const reg_t rnmi_trap_handler_address = 0;
+      const bool nmie = !(p->state.mnstatus && !get_field(p->state.mnstatus->read(), MNSTATUS_NMIE));
+
+      p->state.pc = !nmie ? rnmi_trap_handler_address : trap_handler_address;
       p->state.mepc->write(epc);
-      xintstatus = set_field(xintstatus, MINTSTATUS_MIL, p->CLIC.clic_nlevel);
-      p->state.csrmap[CSR_MINTSTATUS]->write(xintstatus);
-      p->state.mcause->write(cause);
+      p->state.mcause->write(t.cause());
       p->state.mtval->write(t.get_tval());
       p->state.mtval2->write(t.get_tval2());
       p->state.mtinst->write(t.get_tinst());
-      s = p->state.mstatus->read();
-      s = set_field(s, MSTATUS_MPIE, prev_ie);
-      s = set_field(s, MSTATUS_MPP, prev_priv);
+
+      reg_t s = p->state.mstatus->read();
+      s = set_field(s, MSTATUS_MPIE, get_field(s, MSTATUS_MIE));
+      s = set_field(s, MSTATUS_MPP, p->state.prv);
       s = set_field(s, MSTATUS_MIE, 0);
       s = set_field(s, MSTATUS_MPV, curr_virt);
       s = set_field(s, MSTATUS_GVA, t.has_gva());
       s = set_field(s, MSTATUS_MPELP, p->state.elp);
+      p->state.elp = elp_t::NO_LP_EXPECTED;
       p->state.mstatus->write(s);
       if (p->state.mstatush) p->state.mstatush->write(s >> 32);  // log mstatush change
-      break;
-
-    default:
-      break;
-  } 
- 
-  const reg_t rnmi_trap_handler_address = 0;
-  const bool nmie = !(p->state.mnstatus && !get_field(p->state.mnstatus->read(), MNSTATUS_NMIE));
-  
-  p->state.pc = !nmie ? rnmi_trap_handler_address : trap_handler_address;
-  
-  p->state.elp = elp_t::NO_LP_EXPECTED;
-
-  switch (p->CLIC.clic_npriv)
-  {
-  case PRV_U:
-    p->set_privilege(PRV_U, false);
-    break;
-  case PRV_S:
-    p->set_privilege(PRV_S, false);
-    break;
-  case PRV_M:
-  p->set_privilege(PRV_M, false);
-    break;
-  
-  default:
-    break;
+      p->state.tcontrol->write((p->state.tcontrol->read() & CSR_TCONTROL_MTE) ? CSR_TCONTROL_MPTE : 0);
+      p->set_privilege(PRV_M, false);
+    }
   }
-
 }
 
 void clic_t::reset() {

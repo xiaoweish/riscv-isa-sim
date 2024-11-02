@@ -39,6 +39,7 @@ public:
   reg_t prev_level; // previous interrupt level  L = max(xintstatus.xil, xintthresh.th)
   
   static bool SMCLIC_enabled;
+  static bool SMCLIC_active;
   static bool SUCLIC_enabled;
   static bool SMCLICSHV_enabled;
   

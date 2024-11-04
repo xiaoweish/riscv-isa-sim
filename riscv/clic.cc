@@ -493,7 +493,7 @@ void clic_t::take_clic_interrupt() {
 
   curr_ie = xstatus_xie && (clicintie[clic_id] != 0);
 
-  if ((clic_npriv > curr_priv) && (0 < clic_nlevel) && curr_ie) // vertical interrupt
+  if ((clic_npriv > curr_priv) && (0 < clic_nlevel) && (clicintie[clic_id] != 0)) // vertical interrupt
   {
     clic_vrtcl_or_hrzntl_int = true;
   }
